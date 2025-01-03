@@ -1,580 +1,940 @@
-function calc_coordinates(pos_array) {
-    let lati = 0, lngi = 0;
-    if (pos_array.length === 0) {
-        return {lng: 0, lat:0};
-    }
-    for (let i = 0; i < pos_array.length; i++) {
-        lati += pos_array[i].lat;
-        lngi += pos_array[i].lng;
-    }
-    return {lng: lngi / pos_array.length, lat: lati / pos_array.length};
-}
-
-
-function roundFloat(num) {
-    return Math.round(num * 10000) / 10000;
-}
-
-
+// Configure Cesium
 Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIxM2MyODI3Zi0yZGIzLTRlOTMtYjg3My0yOGMyYTYxM2U1NjAiLCJpZCI6MjYwODAzLCJpYXQiOjE3MzM3MDgyNjh9.FY-d2_kcOZ4zQOaNZL3_Ta1CFrnb7bB3Rn8C8jsHu3E';
+var mapboxStyleId = "navigation-night-v1";
+const mapbox = new Cesium.MapboxStyleImageryProvider({
+    styleId: mapboxStyleId,
+    accessToken: 'pk.eyJ1IjoibXE5NTEwMDkiLCJhIjoiY20zczV6bDFqMGN0dzJqczFqM3lkYjJiMyJ9.PdtSQiKYaeb2YZwJBhLvbA'
+});
 const viewer = new Cesium.Viewer('cesiumContainer', {
     timeline:false,
     animation: false,
     skyBox: false,
     fullscreenButton: false,
+    geocoder: false,
+    homeButton: false,
+    sceneModePicker: false,
+    navigationHelpButton: false,
+    baseLayerPicker: false,
     terrainProvider: new Cesium.EllipsoidTerrainProvider(),
+    baseLayer: new Cesium.ImageryLayer(mapbox),
 });
-var ajaxTimeout = 60 * 1000; // in milliseconds
-var loadServLocStats = false;
-var servlocAppliedBindings = false;
+const scene = viewer.scene;
+const camera = viewer.camera;
+const cameraHeight = 1e6;
 
-$(".selectMode li").click(function() {
-    if (!$(this).hasClass("onSelect")) {
-        viewer.dataSources.removeAll();
-        let selectTabId = $(".onSelect").attr("id");
-        switch (selectTabId) {
-            case "tab-servloc":
-                $("#servloc-display").css("visibility", "hidden");
-                $(".onSelect").removeClass("onSelect");
-                break;
-            case "tab-logic-links":
-                $(".onSelect").removeClass("onSelect");
-                break;
-            case "tab-cable":
-                $(".onSelect").removeClass("onSelect");
-                break;
-        }
-        $(this).addClass("onSelect");
-        switch ($(this).attr("id")) {
-            case "tab-servloc":
-                $("#servloc-display").css("visibility", "visible");
-                tabServLoc();
-                break;
-            case "tab-logic-links":
-                tabLogicalLinks();
-                break;
-            case "tab-cable":
-                tabCable();
-                break;
-        }
+// ajax parameters
+const ajaxTimeout = 60 * 1000;
+const baseURL = "http://101.6.8.175:22223/api/v1/servloc";
+const ajaxMethod = "GET";
+const ajaxDataType = "json";
+
+// point collection
+const pointCollectionIndex = 0;
+const pointCollection = scene.primitives.add(new Cesium.PointPrimitiveCollection());
+
+// link collection
+const linkCollectionIndex = 1, p2cLinkIndex = 0, p2pLinkIndex = 1;
+const linkCollection = scene.primitives.add(new Cesium.PrimitiveCollection());
+const p2cLinkInstanceArray = [];
+const p2pLinkInstanceArray = [];
+
+// billboard collection
+const billboardCollectionIndex = 2;
+const billboardCollection = scene.primitives.add(new Cesium.BillboardCollection());
+
+// physical link collection
+const phyLinkCollectionIndex = 3;
+const phyLinkCollection = scene.primitives.add(new Cesium.PrimitiveCollection());
+
+// addbillboard collection (for clicked physical node's neighbors)
+const addBillboardCollectionIndex = 4;
+const addBillboardCollection = scene.primitives.add(new Cesium.BillboardCollection());
+
+// add link collection (for clicked node's links)
+const addLinkCollectionIndex = 5;
+const addLinkCollection = scene.primitives.add(new Cesium.PrimitiveCollection());
+
+// add point collection (for clicked node's neighbors)
+const addPointCollectionIndex = 6;
+const addPointCollection = scene.primitives.add(new Cesium.PointPrimitiveCollection());
+
+// timer variable
+var timer = null;
+const timeoutInterval = 200; // ms
+
+// Configuration for map
+const nodeHeight = 100;
+const minPixelSize = 4, maxPixelSize = 8, minDistance = 1.5e2, maxDistance = 8e6, maxScaler = 10, minScaler = 1.0;
+const maxAlphaForLogicNode = 1.0, minAlphaForLogicNode = 0.7, alphaForPhyNode = 0.7;
+const linkWidth = 2, linkHeight = 100;
+const minAlphaForLogicLink = 0.1, maxAlphaForLogicLink = 0.5, alphaForPhyLink = 0.7;
+const boardWidth = 16, boardHeight = 16, minBoardScaler = 1, maxBoardScaler = 5, phyNodeHeight = 100, phyLinkWidth = 2, phyLinkHeight = 100;
+const colorMap = {"p2c": Cesium.Color.GREEN, "p2p": Cesium.Color.BLUE, "c2p": Cesium.Color.BROWN};
+const phyLinkColorMap = {"Direct": Cesium.Color.PURPLE, "IXP": Cesium.Color.RED, "submarine-cable": Cesium.Color.YELLOW};
+const minDrawDistance = 100; // km
+
+// last clicked id
+let lastNodeClickedId = undefined, lastPhyNodeClickedId = undefined;
+
+// class for primitive id
+class PrimitiveID {
+    constructor(index, type) {
+        this.index = index;
+        this.type = type;
     }
-});
+}
 
-tabLogicalLinks();
+// class for logic node id
+class LogicNodeID extends PrimitiveID {
+    constructor(index, type, asn, latitude, longitude, nodeType="") {
+        super(index, type);
+        this.asn = asn;
+        this.latitude = latitude;
+        this.longitude = longitude;
+        this.nodeType = nodeType;
+    }
+}
 
-function tabServLoc() {
-    const nodeSource = new Cesium.CustomDataSource('Nodes');
-    const linkSource = new Cesium.CustomDataSource('Links');
-    var lid2SrcCid = {};
-    var lid2DstCid = [];
-    // setting up infobox close event
-    $("#servloc-infobox-close").click(function() {
-        document.getElementById("servloc-infobox").style.visibility = "hidden";
-        let linkSource = viewer.dataSources.getByName("Links")[0];
-        let entityCollectionValues = linkSource.entities.values;
-        for (let i=0; i<entityCollectionValues.length; i++) {
-            let entity = entityCollectionValues[i];
-            entity.show = false;
-        }
-    });
+// class for logic link id
+class LogicLinkID extends PrimitiveID {
+    constructor(index, type, srcNodeIndex, dstNodeIndex, linkType) {
+        super(index, type);
+        this.srcNodeIndex = srcNodeIndex;
+        this.dstNodeIndex = dstNodeIndex;
+        this.linkType = linkType;
+    }
+}
 
+class PhysicalNodeID extends PrimitiveID {
+    constructor(index, type, asn, country, latitude, longitude, linkType="") {
+        super(index, type);
+        this.asn = asn;
+        this.latitude = latitude;
+        this.longitude = longitude;
+        this.country = country;
+        this.linkType = linkType;
+    }
+}
+
+class PhysicalLinkID extends PrimitiveID {
+    constructor(index, type, srcNodeIndex, dstNodeIndex, linkType) {
+        super(index, type);
+        this.srcNodeIndex = srcNodeIndex;
+        this.dstNodeIndex = dstNodeIndex;
+        this.linkType = linkType;
+    }
+}
+
+// main function
+main();
+
+function displayLogicNodes() {
     $.ajax({
-        url: 'http://101.6.8.175:22223/api/v1/servloc/clusters/detail',
-        type: 'GET',
-        dataType: 'json',
+        url: baseURL + "/logic-nodes/detail",
+        type: ajaxMethod,
+        dataType: ajaxDataType,
         timeout: ajaxTimeout,
     }).done(function(response) {
-        let data = response.data;
-        nodeSource.entities.suspendEvents();
-        for (let i = 0; i < data.length; i++) {
-            const clusterId = data[i].index, latitude = data[i].latitude, longitude = data[i].longitude, size = data[i].size;
-            let entity = nodeSource.entities.add({
-                id: `Cluster-${clusterId}`,
-                name: `Cluster-${clusterId}`,
-                position: Cesium.Cartesian3.fromDegrees(longitude, latitude),
-                billboard: {
-                    image: "/svg/router.svg",
-                    width: 24,
-                    height: 24,
-                },
-                label: {
-                    text: `Cluster-${clusterId}`,
-                    font: '14px sans-serif',
-                    style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-                    outlineWidth: 2,
-                    verticalOrigin: Cesium.VerticalOrigin.TOP,
-                    pixelOffset: new Cesium.Cartesian2(0, 14),
+        const data = response.data;
+        const dataLength = data.length;
+        let nbOfNode = 0;
+        for (let i=0; i<dataLength; i++) {
+            const index = data[i].index, asn = data[i].asn, latitude = data[i].latitude, longitude = data[i].longitude;
+            pointCollection.add({
+                id: new LogicNodeID(index, "Node", asn, latitude, longitude),
+                position: Cesium.Cartesian3.fromDegrees(longitude, latitude, nodeHeight),
+                color: Cesium.Color.fromRandom({alpha: maxAlphaForLogicNode}),
+                pixelSize: minPixelSize,
+                scaleByDistance: new Cesium.NearFarScalar(minDistance, maxScaler, maxDistance, minScaler),
+            });
+            nbOfNode ++;
+        }
+        console.log(`NB of nodes: ${nbOfNode}`);
+    });
+}
+
+function displayLogicLinks() {
+    $.ajax({
+        url: baseURL + "/logic-links/detail",
+        type: ajaxMethod,
+        dataType: ajaxDataType,
+        timeout: ajaxTimeout,
+    }).done(function(response) {
+        const data = response.data;
+        let nbOfLink = 0;
+        for (let i=0; i<data.length; i++) {
+            // add source node
+            const srcNodeIndex = data[i].src_node_index, srcLatitude = data[i].src_latitude, srcLongitude = data[i].src_longitude;
+            // add destination node
+            const dstNodeIndex = data[i].dst_node_index, dstLatitude = data[i].dst_latitude, dstLongitude = data[i].dst_longitude;;
+            // add link
+            const linkIndex = data[i].index;
+            const linkType = data[i].link_type;
+            const polylineInstance = new Cesium.GeometryInstance({
+                id: new LogicLinkID(linkIndex, "Link", srcNodeIndex, dstNodeIndex, linkType),
+                geometry: new Cesium.PolylineGeometry({
+                    positions: Cesium.Cartesian3.fromDegreesArrayHeights([
+                        srcLongitude, srcLatitude, linkHeight,
+                        dstLongitude, dstLatitude, linkHeight,
+                    ]),
+                    width: linkWidth,
+                    vertexFormat : Cesium.PolylineColorAppearance.VERTEX_FORMAT
+                }),
+                attributes: {
+                    color: Cesium.ColorGeometryInstanceAttribute.fromColor(colorMap[linkType].withAlpha(minAlphaForLogicLink)),
                 },
             });
+            if (linkType === "p2c") {
+                p2cLinkInstanceArray.push(polylineInstance);
+            }
+            else {
+                p2pLinkInstanceArray.push(polylineInstance);
+            }
+            nbOfLink ++;
         }
-        nodeSource.entities.resumeEvents();
-
-        const dataSourcePremise = viewer.dataSources.add(nodeSource);
-        dataSourcePremise.then(function(dataSource) {
-            const pixelRange = 28;
-            const minimumClusterSize = 3;
-            const enabled = true;
-
-            dataSource.clustering.enabled = enabled;
-            dataSource.clustering.pixelRange = pixelRange;
-            dataSource.clustering.minimumClusterSize = minimumClusterSize;
-
-            let removeListener;
-
-            const pinBuilder = new Cesium.PinBuilder();
-            const pin100 = pinBuilder.fromText("100+", Cesium.Color.RED, 52).toDataURL();
-            const pin50 = pinBuilder.fromText("50+", Cesium.Color.PURPLE, 48).toDataURL();
-            const pin40 = pinBuilder.fromText("40+", Cesium.Color.ORANGE, 44).toDataURL();
-            const pin30 = pinBuilder.fromText("30+", Cesium.Color.YELLOW, 40).toDataURL();
-            const pin20 = pinBuilder.fromText("20+", Cesium.Color.GREEN, 36).toDataURL();
-            const pin10 = pinBuilder.fromText("10+", Cesium.Color.BLUE, 32).toDataURL();
-
-            const singleDigitPins = new Array(8);
-            for (let i = 0; i < singleDigitPins.length; ++i) {
-                singleDigitPins[i] = pinBuilder
-                .fromText(`${i + 2}`, Cesium.Color.VIOLET, 28)
-                .toDataURL();
-            }
-
-            function customStyle() {
-                if (Cesium.defined(removeListener)) {
-                    removeListener();
-                    removeListener = undefined;
-                } 
-                else {
-                    removeListener = dataSource.clustering.clusterEvent.addEventListener(
-                        function (clusteredEntities, cluster) {
-                            cluster.label.show = false;
-                            cluster.billboard.show = true;
-                            cluster.billboard.id = cluster.label.id;
-                            cluster.billboard.verticalOrigin = Cesium.VerticalOrigin.BOTTOM;
-
-                            if (clusteredEntities.length >= 100) {
-                                cluster.billboard.image = pin100;
-                            }
-                            else if (clusteredEntities.length >= 50) {
-                                cluster.billboard.image = pin50;
-                            }
-                            else if (clusteredEntities.length >= 40) {
-                                cluster.billboard.image = pin40;
-                            }
-                            else if (clusteredEntities.length >= 30) {
-                                cluster.billboard.image = pin30;
-                            }
-                            else if (clusteredEntities.length >= 20) {
-                                cluster.billboard.image = pin20;
-                            }
-                            else if (clusteredEntities.length >= 10) {
-                                cluster.billboard.image = pin10;
-                            }
-                            else {
-                                cluster.billboard.image = singleDigitPins[clusteredEntities.length - 2];
-                            }
-                        },
-                    );
-                }
-
-                // force a re-cluster with the new styling
-                const pixelRange = dataSource.clustering.pixelRange;
-                dataSource.clustering.pixelRange = 0;
-                dataSource.clustering.pixelRange = pixelRange;
-            }
-
-            // start with custom style
-            customStyle();
-            // if (!servlocAppliedBindings) {
-            //     const viewModel = {
-            //         pixelRange: pixelRange,
-            //         minimumClusterSize: minimumClusterSize,
-            //     };
-            //     Cesium.knockout.track(viewModel);
-    
-            //     const toolbar = document.getElementById("toolbar");
-            //     Cesium.knockout.applyBindings(viewModel, toolbar);
-    
-            //     function subscribeParameter(name) {
-            //             Cesium.knockout.getObservable(viewModel, name).subscribe(function (newValue) {
-            //             dataSource.clustering[name] = newValue;
-            //         });
-            //     }
-            //     subscribeParameter("pixelRange");
-            //     subscribeParameter("minimumClusterSize");
-            //     servlocAppliedBindings = true;
-            // }
-        });
+        linkCollection.add(
+            new Cesium.Primitive({
+                geometryInstances: p2cLinkInstanceArray,
+                appearance: new Cesium.PolylineColorAppearance({
+                    translucent : true
+                }),
+            })
+        );
+        linkCollection.add(
+            new Cesium.Primitive({
+                geometryInstances: p2pLinkInstanceArray,
+                appearance: new Cesium.PolylineColorAppearance({
+                    translucent : true
+                }),
+            })
+        );
+        console.log(`NB of links: ${nbOfLink}`);
+        console.log(`NB of p2c links: ${p2cLinkInstanceArray.length}`);
+        console.log(`NB of p2p links: ${p2pLinkInstanceArray.length}`);
     });
+}
+
+function displayStatistiscs() {
+    displayASRank();
+}
+
+function displayASRank() {
+    $.ajax({
+        url: baseURL + "/asrank/detail",
+        type: ajaxMethod,
+        dataType: ajaxDataType,
+        timeout: ajaxTimeout,
+    }).done(function(response) {
+        const data = response.data;
+        let logicAsnSummary = document.getElementById("logic-links-asn-summary-body");
+        for (let i = 0; i < data.length; i++) {
+            let trElement = document.createElement("tr");
+            // append index
+            let tdElement = document.createElement("td");
+            tdElement.appendChild(document.createTextNode(`${i+1}`));
+            trElement.appendChild(tdElement);
+            // append asn
+            tdElement = document.createElement("td");
+            tdElement.appendChild(document.createTextNode(`${data[i].asn}`));
+            trElement.appendChild(tdElement);
+            // append name
+            tdElement = document.createElement("td");
+            tdElement.appendChild(document.createTextNode(`${data[i].name}`));
+            trElement.appendChild(tdElement);
+            // append organization
+            tdElement = document.createElement("td");
+            tdElement.appendChild(document.createTextNode(`${data[i].organization}`));
+            trElement.appendChild(tdElement);
+            // append country flag
+            tdElement = document.createElement("td");
+            let img = document.createElement("img");
+            img.src = `/flags/${data[i].country_code}.png`;
+            tdElement.appendChild(img);
+            trElement.appendChild(tdElement);
+            // append country
+            tdElement = document.createElement("td");
+            tdElement.appendChild(document.createTextNode(`${data[i].country}`));
+            trElement.appendChild(tdElement);
+            // append provider
+            tdElement = document.createElement("td");
+            tdElement.appendChild(document.createTextNode(`${data[i].degree_provider}`));
+            tdElement.style.borderLeft = "1px solid white";
+            trElement.appendChild(tdElement);
+            // append peer
+            tdElement = document.createElement("td");
+            tdElement.appendChild(document.createTextNode(`${data[i].degree_peer}`));
+            trElement.appendChild(tdElement);
+            // append customer
+            tdElement = document.createElement("td");
+            tdElement.appendChild(document.createTextNode(`${data[i].degree_customer}`));
+            trElement.appendChild(tdElement);
+            // apppend number of prefixes
+            tdElement = document.createElement("td");
+            tdElement.appendChild(document.createTextNode(`${data[i].prefix_size}`));
+            trElement.appendChild(tdElement);
+            // append cone size
+            tdElement = document.createElement("td");
+            tdElement.appendChild(document.createTextNode(`${data[i].cone_size}`));
+            trElement.appendChild(tdElement);
+            // append cone prefix size
+            tdElement = document.createElement("td");
+            tdElement.appendChild(document.createTextNode(`${data[i].cone_prefix_size}`));
+            trElement.appendChild(tdElement);
+            // apppend row
+            logicAsnSummary.appendChild(trElement);
+        }
+    });
+}
+
+function selectLogicLinks() {
+    $("#select-logic-links").change(function() {
+        let opt = $("#select-logic-links").val();
+        switch (opt) {
+            case "P2C":
+                scene.primitives.get(linkCollectionIndex).get(p2pLinkIndex).show = false;
+                scene.primitives.get(linkCollectionIndex).get(p2cLinkIndex).show = true;
+                break;
+            case "P2P":
+                scene.primitives.get(linkCollectionIndex).get(p2cLinkIndex).show = false;
+                scene.primitives.get(linkCollectionIndex).get(p2pLinkIndex).show = true;
+                break;
+            case "ALL":
+                scene.primitives.get(linkCollectionIndex).get(p2cLinkIndex).show = true;
+                scene.primitives.get(linkCollectionIndex).get(p2pLinkIndex).show = true;
+                break;
+        }
+    });
+}
+
+function fillLogicLinkInfoBox(nodeIndex) {
+    console.log("Fill logic link info box for node index: " + nodeIndex);
+    $.ajax({
+        url: baseURL + "/logic-nodes/detail",
+        type: ajaxMethod,
+        data: {"idxs": `${nodeIndex}`},
+        dataType: ajaxDataType,
+        timeout: ajaxTimeout,
+    }).done(function(response) {
+        const data = response.data;
+        const dataLength = data.length;
+        let nodeDetailElem = document.getElementById("logic-links-infobox-body");
+        while (nodeDetailElem.firstChild) {
+            nodeDetailElem.removeChild(nodeDetailElem.firstChild);
+        }
+        $(".logic-links-infobox-member-expand").text("Expand");
+        $("tr").remove(".logic-links-infobox-member-expand-tr");
+        if (dataLength < 1) return;
+        const nodeInfo = data[0];
+        let trElement = document.createElement("tr");
+        // append index
+        let thElement = document.createElement("th");
+        thElement.appendChild(document.createTextNode("ASN"));
+        trElement.appendChild(thElement);
+        let tdElement = document.createElement("td");
+        tdElement.appendChild(document.createTextNode(nodeInfo.asn));
+        trElement.appendChild(tdElement);
+        nodeDetailElem.appendChild(trElement);
+        // append name
+        trElement = document.createElement("tr");
+        thElement = document.createElement("th");
+        thElement.appendChild(document.createTextNode("Name"));
+        trElement.appendChild(thElement);
+        tdElement = document.createElement("td");
+        tdElement.appendChild(document.createTextNode(nodeInfo.name));
+        trElement.appendChild(tdElement);
+        nodeDetailElem.appendChild(trElement);
+        // append organization
+        trElement = document.createElement("tr");
+        thElement = document.createElement("th");
+        thElement.appendChild(document.createTextNode("Organization"));
+        trElement.appendChild(thElement);
+        tdElement = document.createElement("td");
+        tdElement.appendChild(document.createTextNode(nodeInfo.organization));
+        trElement.appendChild(tdElement);
+        nodeDetailElem.appendChild(trElement);
+        // append country
+        trElement = document.createElement("tr");
+        thElement = document.createElement("th");
+        thElement.appendChild(document.createTextNode("Region"));
+        trElement.appendChild(thElement);
+        tdElement = document.createElement("td");
+        tdElement.appendChild(document.createTextNode(nodeInfo.country));
+        trElement.appendChild(tdElement);
+        nodeDetailElem.appendChild(trElement);
+        // append latitude
+        trElement = document.createElement("tr");
+        thElement = document.createElement("th");
+        thElement.appendChild(document.createTextNode("Latitude"));
+        trElement.appendChild(thElement);
+        tdElement = document.createElement("td");
+        tdElement.appendChild(document.createTextNode(nodeInfo.latitude));
+        trElement.appendChild(tdElement);
+        nodeDetailElem.appendChild(trElement);
+        // append longitude
+        trElement = document.createElement("tr");
+        thElement = document.createElement("th");
+        thElement.appendChild(document.createTextNode("Longitude"));
+        trElement.appendChild(thElement);
+        tdElement = document.createElement("td");
+        tdElement.appendChild(document.createTextNode(nodeInfo.longitude));
+        trElement.appendChild(tdElement);
+        nodeDetailElem.appendChild(trElement);
+        // set visible
+        document.getElementById("logic-links-infobox").style.visibility = "visible";
+    });
+}
+
+
+function drawSpecificASLogicMap(data, nodeIndex)
+{
+    pointCollection.show = false;
+    linkCollection.show = false;
+    const addlinkInstanceArray = [];
+    addLinkCollection.removeAll();
+    addPointCollection.removeAll();
+    let addPointDrawFlag = {};
+    for (let i = 0; i < data.length; i++) {
+        const addLinkIndex = data[i].index;
+        const srcNodeIndex = data[i].src_node_index, dstNodeIndex = data[i].dst_node_index, srcAsn = data[i].src_asn, dstAsn = data[i].dst_asn;
+        const srcLatitude = data[i].src_latitude, srcLongitude = data[i].src_longitude, dstLatitude = data[i].dst_latitude, dstLongitude = data[i].dst_longitude;
+        let linkType = undefined;
+        
+        if (data[i].link_type === "p2c" && nodeIndex === dstNodeIndex) { linkType = "c2p"; }
+        else { linkType = data[i].link_type; }
+
+        if (addPointDrawFlag[srcNodeIndex] === undefined) {
+            let nodeColor = (srcNodeIndex === nodeIndex) ? Cesium.Color.BLACK : Cesium.Color.fromRandom({alpha: minAlphaForLogicNode});
+            let pixelSize = (srcNodeIndex === nodeIndex) ? maxPixelSize : minPixelSize;
+            let nodeType = undefined;
+            if (srcNodeIndex === nodeIndex) { nodeType = "Base"; }
+            else {
+                nodeType = (data[i].link_type === "p2c") ? "Provider" : ((data[i].link_type === "p2p")? "Peer" : "");
+            }
+            addPointCollection.add({
+                id: new LogicNodeID(srcNodeIndex, "Node", srcAsn, srcLatitude, srcLongitude, nodeType),
+                position: Cesium.Cartesian3.fromDegrees(srcLongitude, srcLatitude, nodeHeight),
+                color: nodeColor,
+                pixelSize: pixelSize,
+                scaleByDistance: new Cesium.NearFarScalar(minDistance, maxScaler, maxDistance, minScaler),
+            });
+            addPointDrawFlag[srcNodeIndex] = true;
+        }
+
+        if (addPointDrawFlag[dstNodeIndex] === undefined) {
+            let nodeColor = (dstNodeIndex === nodeIndex) ? Cesium.Color.BLACK : Cesium.Color.fromRandom({alpha: minAlphaForLogicNode});
+            let pixelSize = (dstNodeIndex === nodeIndex) ? maxPixelSize : minPixelSize;
+            let nodeType = undefined;
+            if (dstNodeIndex === nodeIndex) { nodeType = "Base"; }
+            else {
+                nodeType = (data[i].link_type === "p2c") ? "Customer" : ((data[i].link_type === "p2p")? "Peer" : "");
+            }
+            addPointCollection.add({
+                id: new LogicNodeID(dstNodeIndex, "Node", dstAsn, dstLatitude, dstLongitude, nodeType),
+                position: Cesium.Cartesian3.fromDegrees(dstLongitude, dstLatitude, nodeHeight),
+                color: nodeColor,
+                pixelSize: pixelSize,
+                scaleByDistance: new Cesium.NearFarScalar(minDistance, maxScaler, maxDistance, minScaler),
+            });
+            addPointDrawFlag[dstNodeIndex] = true;
+        }
+
+        addlinkInstanceArray.push(new Cesium.GeometryInstance({
+            id: new LogicLinkID(addLinkIndex, "Link", srcNodeIndex, dstNodeIndex, linkType),
+            geometry: new Cesium.PolylineGeometry({
+                positions: Cesium.Cartesian3.fromDegreesArrayHeights([
+                    srcLongitude, srcLatitude, linkHeight,
+                    dstLongitude, dstLatitude, linkHeight,
+                ]),
+                width: linkWidth,
+                vertexFormat : Cesium.PolylineColorAppearance.VERTEX_FORMAT
+            }),
+            attributes: {
+                color: Cesium.ColorGeometryInstanceAttribute.fromColor(colorMap[linkType].withAlpha(maxAlphaForLogicLink)),
+            },
+        }));
+    }
+    addLinkCollection.add(
+        new Cesium.Primitive({
+            geometryInstances: addlinkInstanceArray,
+            appearance: new Cesium.PolylineColorAppearance({
+                translucent : true
+            }),
+        })
+    );
+    addPointCollection.show = true;
+    addLinkCollection.show = true;
+}
+
+
+function queryForSpecificLogicNodeIndex(nodeIndex) {
+    $.ajax({
+        url: baseURL + "/logic-links/detail",
+        type: ajaxMethod,
+        data: {"idxs": `${nodeIndex}`},
+        dataType: ajaxDataType,
+        timeout: ajaxTimeout,
+    }).done(function(response) {
+        const data = response.data;
+        const dataLength = data.length;
+        if (dataLength < 1) return;
+        drawSpecificASLogicMap(data, nodeIndex);
+    });
+}
+
+
+function fillServLocInfoBox(nodeInfo) {
+    console.log("Fill servloc info box for node index: " + nodeInfo.index);
+    const asn = nodeInfo.asn, country = nodeInfo.country, latitude = nodeInfo.latitude, longitude = nodeInfo.longitude;
+    let servlocInfoboxBody = document.getElementById("servloc-infobox-body");
+    while (servlocInfoboxBody.firstChild) {
+        servlocInfoboxBody.removeChild(servlocInfoboxBody.firstChild);
+    }
+    $(".servloc-infobox-member-expand").text("Expand");
+    $("tr").remove(".servloc-infobox-member-expand-tr");
+    // append asn
+    let trElement = document.createElement("tr");
+    let thElement = document.createElement("th");
+    thElement.appendChild(document.createTextNode("ASN"));
+    trElement.appendChild(thElement);
+    let tdElement = document.createElement("td");
+    tdElement.appendChild(document.createTextNode(asn));
+    trElement.appendChild(tdElement);
+    servlocInfoboxBody.append(trElement);
+    // append country
+    trElement = document.createElement("tr");
+    thElement = document.createElement("th");
+    thElement.appendChild(document.createTextNode("Region"));
+    trElement.appendChild(thElement);
+    tdElement = document.createElement("td");
+    tdElement.appendChild(document.createTextNode(country));
+    trElement.appendChild(tdElement);
+    servlocInfoboxBody.append(trElement);
+    // append latitude
+    trElement = document.createElement("tr");
+    thElement = document.createElement("th");
+    thElement.appendChild(document.createTextNode("Latitude"));
+    trElement.appendChild(thElement);
+    tdElement = document.createElement("td");
+    tdElement.appendChild(document.createTextNode(latitude));
+    trElement.appendChild(tdElement);
+    servlocInfoboxBody.append(trElement);
+    // append longitude
+    trElement = document.createElement("tr");
+    thElement = document.createElement("th");
+    thElement.appendChild(document.createTextNode("Longitude"));
+    trElement.appendChild(thElement);
+    tdElement = document.createElement("td");
+    tdElement.appendChild(document.createTextNode(longitude));
+    trElement.appendChild(tdElement);
+    servlocInfoboxBody.append(trElement);
+    // set visible
+    document.getElementById("servloc-infobox").style.visibility = "visible";
+}
+
+
+function queryForSpecificPhysicalNodeIndex(phyNodeIndex) {
+    addBillboardCollection.removeAll();
+    phyLinkCollection.removeAll();
 
     $.ajax({
-        url: "http://101.6.8.175:22223/api/v1/servloc/phy-links/detail",
+        url: baseURL + "/phy-links/detail",
+        type: ajaxMethod,
+        data: {"nidxs": `${phyNodeIndex}`},
+        dataType: ajaxDataType,
+        timeout: ajaxTimeout,
+    }).done(function(response) {
+        const data = response.data;
+        const dataLength = data.length;
+        if (dataLength < 1) return;
+        const phyLinkInstanceArray = [];
+        for (let i = 0; i < data.length; i++) {
+            const linkIndex = data[i].index;
+            const srcNodeIndex = data[i].src_nidx, dstNodeIndex = data[i].dst_nidx;
+            const nodeIndex = (srcNodeIndex === phyNodeIndex) ? dstNodeIndex : srcNodeIndex;
+            const latitude = (srcNodeIndex === phyNodeIndex) ? data[i].dst_latitude : data[i].src_latitude;
+            const longitude = (srcNodeIndex === phyNodeIndex) ? data[i].dst_longitude : data[i].src_longitude;
+            const asn = (srcNodeIndex === phyNodeIndex) ? data[i].dst_asn : data[i].src_asn;
+            const country = (srcNodeIndex === phyNodeIndex) ? data[i].dst_country : data[i].src_country;
+            const linkType = data[i].link_type;
+            const linkDistance = data[i].distance;
+            if ((linkDistance !== undefined) && (linkDistance < minDistance)) continue;
+            
+            addBillboardCollection.add({
+                id: new PhysicalNodeID(nodeIndex, "PhyNode", asn, country, latitude, longitude, linkType),
+                position: Cesium.Cartesian3.fromDegrees(longitude, latitude, phyNodeHeight),
+                image: "/svg/router.svg",
+                width: boardWidth,
+                height: boardHeight,
+                scaleByDistance: new Cesium.NearFarScalar(minDistance, maxBoardScaler, maxDistance, minBoardScaler),
+                color: phyLinkColorMap[linkType].withAlpha(alphaForPhyNode),
+            });
+
+            const srcLatitude = data[i].src_latitude, srcLongitude = data[i].src_longitude, dstLatitude = data[i].dst_latitude, dstLongitude = data[i].dst_longitude;
+            phyLinkInstanceArray.push(new Cesium.GeometryInstance({
+                id: new PhysicalLinkID(linkIndex, "PhyLink", srcNodeIndex, dstNodeIndex, linkType),
+                geometry: new Cesium.PolylineGeometry({
+                    positions: Cesium.Cartesian3.fromDegreesArrayHeights([
+                        srcLongitude, srcLatitude, phyLinkHeight,
+                        dstLongitude, dstLatitude, phyLinkHeight,
+                    ]),
+                    width: phyLinkWidth,
+                    vertexFormat : Cesium.PolylineColorAppearance.VERTEX_FORMAT
+                }),
+                attributes: {
+                    color: Cesium.ColorGeometryInstanceAttribute.fromColor(phyLinkColorMap[linkType].withAlpha(alphaForPhyLink)),
+                },
+            }));
+        }
+        phyLinkCollection.add(
+            new Cesium.Primitive({
+                geometryInstances: phyLinkInstanceArray,
+                appearance: new Cesium.PolylineColorAppearance({
+                    translucent : true
+                }),
+            })
+        );
+    });
+}
+
+
+function quertForSpecificPhysicalNodeAsn(asn) {
+    pointCollection.show = false;
+    linkCollection.show = false;
+    addPointCollection.removeAll();
+    addPointCollection.show = false;
+    addLinkCollection.removeAll();
+    addLinkCollection.show = false;
+    billboardCollection.removeAll();
+
+    $.ajax({
+        url: baseURL + "/nodes/detail",
         type: 'GET',
+        data: {"asns": `${asn}`},
         dataType: 'json',
         timeout: ajaxTimeout,
     }).done(function(response) {
         const data = response.data;
-        const colorMap = {"Direct": Cesium.Color.GREEN, "IXP": Cesium.Color.RED, "submarine-cable": Cesium.Color.BLUE};
-        const lineWidth = 2, lineHeight = 100000;
-        linkSource.entities.suspendEvents();
-        console.log(`NB of links: ${data.length}`);
-        let nb_added_links = 0;
-        for (let i = 0; i < data.length; i++) {
-            if (!data[i].cross_cluster) continue;
-            if (data[i].distance > 6000 || data[i].distance < 100) continue;
-            let index = data[i].index;
-            let src_lat = data[i].src_latitude, src_lng = data[i].src_longitude, dst_lat = data[i].dst_latitude, dst_lng = data[i].dst_longitude;
-            src_lat = roundFloat(src_lat); src_lng = roundFloat(src_lng); dst_lat = roundFloat(dst_lat); dst_lng = roundFloat(dst_lng);
-            const link_type = data[i].link_type;
-            let linkColor = colorMap[link_type];
-            let entity = linkSource.entities.add({
-                id: `Link-${index}`,
-                name: `Link-${index}`,
-                polyline: {
-                    positions: Cesium.Cartesian3.fromDegreesArrayHeights([
-                        src_lng, src_lat, lineHeight,
-                        dst_lng, dst_lat, lineHeight,
-                    ]),
-                    width: lineWidth,
-                    material: linkColor,
-                },
+        const dataLength = data.length;
+        if (dataLength < 1) return;
+        for (let i=0; i<data.length; i++) {
+            const index = data[i].index, asn = data[i].asn, country = data[i].country, latitude = data[i].latitude, longitude = data[i].longitude;
+            billboardCollection.add({
+                id: new PhysicalNodeID(index, "PhyNode", asn, country, latitude, longitude),
+                position: Cesium.Cartesian3.fromDegrees(longitude, latitude, phyNodeHeight),
+                image: "/svg/router.svg",
+                width: boardWidth,
+                height: boardHeight,
+                scaleByDistance: new Cesium.NearFarScalar(minDistance, maxBoardScaler, maxDistance, minBoardScaler),
             });
-            lid2SrcCid[index] = data[i].src_cidx;
-            lid2DstCid[index] = data[i].dst_cidx;
-            let description = "<table class='cesium-infoBox-defaultTable'><tbody>" + "<tr><th>Link</th><td>" + index + "</td></tr>";
-            description += "<tr><th>ASN 1</th><td>" + data[i].src_asn + "</td></tr>";
-            description += "<tr><th>Region 1</th><td>" + data[i].src_country + "</td></tr>";
-            description += "<tr><th>Position</th><td>" + `${src_lat},${dst_lat}` + "</td></tr>";
-            description += "<tr><th>ASN2</th><td>" + data[i].dst_asn + "</td></tr>";
-            description += "<tr><th>Region 2</th><td>" + data[i].dst_country + "</td></tr>";
-            description += "<tr><th>Position</th><td>" + `${dst_lat},${dst_lng}` + "</td></tr>";
-            description += "<tr><th>Type</th><td>" + link_type + "</td></tr>";
-            description += "</tbody></table>";
-            entity.description = description;
-            entity.show = false;
-            nb_added_links++;
         }
-        console.log(`NB of added links: ${nb_added_links}`);
-        linkSource.entities.resumeEvents();
-        viewer.dataSources.add(linkSource);
     });
+}
 
-    viewer.selectedEntityChanged.addEventListener(function(selectedEntity) {
-        if (Cesium.defined(selectedEntity)) {
-            if (Cesium.defined(selectedEntity.name) && selectedEntity.name.startsWith("Cluster")) {
-                hide = false;
-                let clusterId = selectedEntity.id;
-                clusterId = parseInt(clusterId.replace("Cluster-", ""));
+
+function logicLinksInfoboxExpandAndCollapse() {
+    $(".logic-links-infobox-member-expand").click(function() {
+        console.log("Expand clicked, lastNodeClickedId: " + lastNodeClickedId);
+        if (lastNodeClickedId !== undefined) {
+            if ($(this).text() === "Expand") {
                 $.ajax({
-                    url: "http://101.6.8.175:22223/api/v1/servloc/nodes/detail",
-                    type: 'GET',
-                    data: {"cidxs": clusterId},
-                    dataType: 'json',
+                    url: baseURL + "/logic-links/detail",
+                    type: ajaxMethod,
+                    data: {"idxs": `${lastNodeClickedId}`},
+                    dataType: ajaxDataType,
                     timeout: ajaxTimeout,
                 }).done(function(response) {
-                    let data = response.data;
-                    let nodeDetailElem = document.getElementById("servloc-infobox-body");
-                    while (nodeDetailElem.firstChild) {
-                        nodeDetailElem.removeChild(nodeDetailElem.firstChild);
-                    }
-                    for (let i = 0; i < data.length; i++) {
-                        let tr_elem = document.createElement("tr");
-                        // append asn
-                        let td_elem = document.createElement("td");
-                        td_elem.appendChild(document.createTextNode(data[i].asn));
-                        tr_elem.appendChild(td_elem);
-                        //append image
-                        td_elem = document.createElement("td");
-                        let img = document.createElement("img");
-                        img.src = `/flags/${data[i].country}.png`;
-                        td_elem.appendChild(img);
-                        tr_elem.appendChild(td_elem);
-                        // append country
-                        td_elem = document.createElement("td");
-                        td_elem.appendChild(document.createTextNode(data[i].country));
-                        tr_elem.appendChild(td_elem);
-                        // append latitude
-                        td_elem = document.createElement("td");
-                        td_elem.appendChild(document.createTextNode(data[i].latitude));
-                        tr_elem.appendChild(td_elem);
-                        // append longitude
-                        td_elem = document.createElement("td");
-                        td_elem.appendChild(document.createTextNode(data[i].longitude));
-                        tr_elem.appendChild(td_elem);
-                        // append row
-                        nodeDetailElem.appendChild(tr_elem);
-                    }
-                    document.getElementById("servloc-infobox").style.visibility = "visible";
-                });
-                let linkSourceCollection = viewer.dataSources.getByName("Links");
-                let selectLinkSource = linkSourceCollection[0];
-                if (selectLinkSource !== undefined) {
-                    let entityCollectionValues = selectLinkSource.entities.values;
-                    for (let i=0; i<entityCollectionValues.length; i++) {
-                        let entity = entityCollectionValues[i];
-                        let entityId = entity.id;
-                        const index = parseInt(entityId.replace("Link-", ""));
-                        const src_cid = lid2SrcCid[index];
-                        const dst_cid = lid2DstCid[index];
-                        if (src_cid == clusterId || dst_cid == clusterId) {
-                            entity.show = true;
+                    const data = response.data;
+                    const dataLength = data.length;
+                    if (dataLength < 1) return;
+                    let relationshipMap = {};
+                    for (let i = 0; i < dataLength; i++) {
+                        const srcNodeIndex = data[i].src_node_index, dstNodeIndex = data[i].dst_node_index;
+                        const linkType = data[i].link_type;
+                        if (linkType === "p2c") {
+                            if (srcNodeIndex === lastNodeClickedId) relationshipMap[dstNodeIndex] = "Customer";
+                            else if (dstNodeIndex === lastNodeClickedId) relationshipMap[srcNodeIndex] = "Provider";
+                        }
+                        else if (linkType === "p2p") {
+                            if (srcNodeIndex === lastNodeClickedId) relationshipMap[dstNodeIndex] = "Peer";
+                            else if (dstNodeIndex === lastNodeClickedId) relationshipMap[srcNodeIndex] = "Peer";
                         }
                     }
-                }
+
+                    // query for information of clicked node neighbor
+                    // Todo: debug for parameters containing non-integer
+                    let keyList = Object.keys(relationshipMap);
+                    let filteredKeyList = [];
+                    let queryParam = ""
+                    for (let j=0; j<keyList.length; j++) {
+                        let pm = parseInt(keyList[j]);
+                        if (!isNaN(pm)) {
+                            filteredKeyList.push(keyList[j]);
+                        }
+                    }
+                    queryParam = filteredKeyList.join(",");
+
+                    $.ajax({
+                        url: baseURL + "/logic-nodes/detail",
+                        type: ajaxMethod,
+                        data: {"idxs": queryParam},
+                        dataType: ajaxDataType,
+                        timeout: ajaxTimeout,
+                    }).done(function(response) {
+                        const data = response.data;
+                        const dataLength = data.length;
+                        if (dataLength < 1) return;
+                        for (let i = 0; i < dataLength; i++) {
+                            let trElement = document.createElement("tr");
+                            trElement.className = "logic-links-infobox-member-expand-tr";
+                            // append index
+                            let tdElement = document.createElement("td");
+                            tdElement.style.width = "10%";
+                            tdElement.appendChild(document.createTextNode(`${dataLength - i}`));
+                            trElement.appendChild(tdElement);
+                            // append asn
+                            tdElement = document.createElement("td");
+                            tdElement.style.width = "20%";
+                            tdElement.appendChild(document.createTextNode(data[i].asn));
+                            trElement.appendChild(tdElement);
+                            // append name
+                            tdElement = document.createElement("td");
+                            tdElement.style.width = "30%";
+                            tdElement.appendChild(document.createTextNode(data[i].name));
+                            trElement.appendChild(tdElement);
+                            // append country
+                            tdElement = document.createElement("td");
+                            tdElement.style.width = "10%";
+                            tdElement.appendChild(document.createTextNode(data[i].country_code));
+                            trElement.appendChild(tdElement);
+                            // append relationship
+                            tdElement = document.createElement("td");
+                            tdElement.style.width = "30%";
+                            tdElement.appendChild(document.createTextNode(relationshipMap[data[i].index]));
+                            trElement.appendChild(tdElement);
+                            $("#logic-links-infobox-member-body").prepend(trElement);
+                        }
+                        $(".logic-links-infobox-member-expand").text("Collapse");
+                    });
+                });
             }
-        }
-        else {
-            document.getElementById("servloc-infobox").style.visibility = "hidden";
-            let linkSource = viewer.dataSources.getByName("Links")[0];
-            if (linkSource !== undefined) {
-                let entityCollectionValues = linkSource.entities.values;
-                for (let i=0; i<entityCollectionValues.length; i++) {
-                    let entity = entityCollectionValues[i];
-                    entity.show = false;
-                }
+            else {
+                $("tr").remove(".logic-links-infobox-member-expand-tr");
+                $(this).text("Expand");
             }
         }
     });
-
-    if (loadServLocStats) {
-        $("#servloc-display").css("visibility", "visible");
-    }
-    else {
-        $.ajax({
-            url: "http://101.6.8.175:22223/api/v1/servloc/nodes/summary/country",
-            type: 'GET',
-            dataType: 'json',
-            timeout: ajaxTimeout,
-        }).done(function(response) {
-            let data = response.data;
-            let countrySummaryElem = document.getElementById("country-summary-body");
-            for (let i = 0; i < data.length; i++) {
-                let tr_elem = document.createElement("tr");
-                let td_elem = document.createElement("td");
-                // append index
-                td_elem.appendChild(document.createTextNode(`${i+1}`));
-                tr_elem.appendChild(td_elem);
-                // append country flag
-                td_elem = document.createElement("td");
-                let img = document.createElement("img");
-                img.src = `/flags/${data[i]._id}.png`;
-                td_elem.appendChild(img);
-                tr_elem.appendChild(td_elem);
-                // append country code
-                td_elem = document.createElement("td");
-                td_elem.appendChild(document.createTextNode(data[i]._id));
-                tr_elem.appendChild(td_elem);
-                //append count
-                td_elem = document.createElement("td");
-                td_elem.appendChild(document.createTextNode(data[i].count));
-                tr_elem.appendChild(td_elem);
-                // append row
-                countrySummaryElem.appendChild(tr_elem);
-            }
-        });
-
-        $.ajax({
-            url: "http://101.6.8.175:22223/api/v1/servloc/nodes/summary/asn",
-            type: 'GET',
-            dataType: 'json',
-            timeout: ajaxTimeout,
-        }).done(function(response) {
-            let data = response.data;
-            let asns = data[0]._id;
-            for (let i=0; i<data.length; i++) {
-                asns += "," + data[i]._id;
-            }
-            $.ajax({
-                url: "http://101.6.8.175:22223/api/v1/servloc/asrank/detail",
-                type: 'GET',
-                data: {"asns": asns},
-                dataType: 'json',
-                timeout: ajaxTimeout,
-            }).done(function(response) {
-                let asrank = response.data;
-                let asrankMap = new Map();
-                for (let i = 0; i < asrank.length; i++) {
-                    asrankMap.set(asrank[i].asn, asrank[i]);
-                }
-                let asnSummaryElem = document.getElementById("asn-summary-body");
-                for (let i = 0; i < data.length; i++) {
-                    let asn_info = asrankMap.get(data[i]._id);
-                    let tr_elem = document.createElement("tr");
-                    let td_elem = document.createElement("td");
-                    // append index
-                    td_elem.appendChild(document.createTextNode(`${i+1}`));
-                    tr_elem.appendChild(td_elem);
-                    // append asn
-                    td_elem = document.createElement("td");
-                    td_elem.appendChild(document.createTextNode(data[i]._id));
-                    tr_elem.appendChild(td_elem);
-                    //append name
-                    td_elem = document.createElement("td");
-                    td_elem.appendChild(document.createTextNode(asn_info.name));
-                    tr_elem.appendChild(td_elem);
-                    // append organization
-                    td_elem = document.createElement("td");
-                    td_elem.appendChild(document.createTextNode(asn_info.organization));
-                    tr_elem.appendChild(td_elem);
-                    // append flag
-                    td_elem = document.createElement("td");
-                    let img = document.createElement("img");
-                    img.src = `/flags/${asn_info.country}.png`;
-                    td_elem.appendChild(img);
-                    tr_elem.appendChild(td_elem);
-                    // append country
-                    td_elem = document.createElement("td");
-                    td_elem.appendChild(document.createTextNode(asn_info.country));
-                    tr_elem.appendChild(td_elem);
-                    // append nb_servloc
-                    td_elem = document.createElement("td");
-                    td_elem.appendChild(document.createTextNode(data[i].count));
-                    tr_elem.appendChild(td_elem);
-                    // append row
-                    asnSummaryElem.appendChild(tr_elem);
-                }
-            });
-        });
-        loadServLocStats = true;
-    }   
 }
 
-function tabLogicalLinks()
-{
-    idx2src_asn = {};
-    idx2dst_asn = {};
 
+function servlocInfoboxExpandAndCollapse() {
+    $(".servloc-infobox-member-expand").click(function() {
+        console.log("Expand clicked, lastPhyNodeClickedId: " + lastPhyNodeClickedId);
+        if (lastPhyNodeClickedId !== undefined) {
+            if ($(this).text() === "Expand") {
+                $.ajax({
+                    url: baseURL + "/phy-links/detail",
+                    type: ajaxMethod,
+                    data: {"nidxs": `${lastPhyNodeClickedId}`},
+                    dataType: ajaxDataType,
+                    timeout: ajaxTimeout,
+                }).done(function(response) {
+                    const data = response.data;
+                    const length = data.length;
+                    if (length < 1) return;
+                    for (let i=0; i<length; i++) {
+                        const linkDistance = data[i].distance;
+                        if ((linkDistance !== undefined) && (linkDistance < minDrawDistance)) continue;
+                        const srcNodeIndex = data[i].src_nidx, dstNodeIndex = data[i].dst_nidx;
+                        const asn = (srcNodeIndex === lastPhyNodeClickedId) ? data[i].dst_asn : data[i].src_asn;
+                        const country = (srcNodeIndex === lastPhyNodeClickedId) ? data[i].dst_country : data[i].src_country;
+                        const phyLinkType = data[i].link_type;
+                        // append asn
+                        let trElement = document.createElement("tr");
+                        let tdElement = document.createElement("td");
+                        tdElement.appendChild(document.createTextNode(asn));
+                        trElement.appendChild(tdElement);
+                        // append country
+                        tdElement = document.createElement("td");
+                        tdElement.appendChild(document.createTextNode(country));
+                        trElement.appendChild(tdElement);
+                        // append type
+                        tdElement = document.createElement("td");
+                        tdElement.appendChild(document.createTextNode(phyLinkType));
+                        trElement.appendChild(tdElement);
+                        trElement.className = "servloc-infobox-member-expand-tr";
+                        $("#servloc-infobox-member-body").prepend(trElement);
+                    }
+                    $(".servloc-infobox-member-expand").text("Collapse");
+                });
+            }
+            else {
+                $("tr").remove(".servloc-infobox-member-expand-tr");
+                $(this).text("Expand");
+            }
+        }
+    });
+}
+
+
+function searchForSpecificAsn(asn) {
+    console.log("Query for ASN: " + asn);
     $.ajax({
-        url: "http://101.6.8.175:22223/api/v1/servloc/logic-links/detail",
-        type: 'GET',
-        dataType: 'json',
+        url: baseURL + "/logic-links/detail",
+        type: ajaxMethod,
+        data: {"asns": `${asn}`},
+        dataType: ajaxDataType,
         timeout: ajaxTimeout,
     }).done(function(response) {
-        const node_height = 100;
         const data = response.data;
-        const logicNodeSource = new Cesium.CustomDataSource('LogicNodes');
-        const logicLinkSource = new Cesium.CustomDataSource('LogicLinks');
-        let nodeMap = {};
-        const line_height = 100;
-        let colorMap = {"p2c": Cesium.Color.RED, "p2p": Cesium.Color.GREEN};
-        logicNodeSource.entities.suspendEvents();
-        logicLinkSource.entities.suspendEvents();
-        let nb_node = 0, nb_link = 0;
+        let nodeIndex = undefined, flyToLatitude = undefined, flyToLongitude = undefined;
         for (let i = 0; i < data.length; i++) {
-            let index = data[i].index;
-            let src_asn = data[i].src_asn, src_country = data[i].src_country, src_lat = data[i].src_latitude, src_lng = data[i].src_longitude;
-            if (nodeMap[src_asn] === undefined) {
-                let entity = logicNodeSource.entities.add({
-                    id: `ASN-${src_asn}`,
-                    name: `ASN-${src_asn}`,
-                    position: Cesium.Cartesian3.fromDegrees(src_lng, src_lat, node_height),
-                    point: {
-                        pixelSize: 5,
-                        Color: Cesium.Color.fromRandom({alpha: 1}),
-                        outlineColor: Cesium.Color.BLACK,
-                        outlineWidth: 2,
-                    }
-                });
-                let description = "<table class='cesium-infoBox-defaultTable'><tbody>" + "<tr><th>ASN</th><td>" + src_asn + "</td></tr>";
-                description += "<tr><th>Region</th><td>" + src_country + "</td></tr>";
-                description += "<tr><th>Position</th><td>" + `${src_lat},${src_lng}` + "</td></tr>";
-                description += "</tbody></table>";
-                entity.description = description;
-                nodeMap[src_asn] = 1;
-                nb_node ++;
+            if (data[i].src_asn === asn) {
+                nodeIndex = data[i].src_node_index;
+                flyToLatitude = data[i].src_latitude;
+                flyToLongitude = data[i].src_longitude;
+                break;
             }
-            let dst_asn = data[i].dst_asn, dst_country = data[i].dst_country, dst_lat = data[i].dst_latitude, dst_lng = data[i].dst_longitude;
-            if (nodeMap[dst_asn] === undefined) {
-                let entity = logicNodeSource.entities.add({
-                    id: `ASN-${dst_asn}`,
-                    name: `ASN-${dst_asn}`,
-                    position: Cesium.Cartesian3.fromDegrees(dst_lng, dst_lat, node_height),
-                    point: {
-                        pixelSize: 5,
-                        Color: Cesium.Color.fromRandom({alpha: 0.7}),
-                        outlineColor: Cesium.Color.BLACK,
-                        outlineWidth: 2,
-                    }
-                });
-                let description = "<table class='cesium-infoBox-defaultTable'><tbody>" + "<tr><th>ASN</th><td>" + dst_asn + "</td></tr>";
-                description += "<tr><th>Region</th><td>" + dst_country + "</td></tr>";
-                description += "<tr><th>Position</th><td>" + `${dst_lat},${dst_lng}` + "</td></tr>";
-                description += "</tbody></table>";
-                entity.description = description;
-                nodeMap[dst_asn] = 1;
-                nb_node ++;
+            else if (data[i].dst_asn === asn) {
+                nodeIndex = data[i].dst_node_index;
+                flyToLatitude = data[i].dst_latitude;
+                flyToLongitude = data[i].dst_longitude;
+                break;
             }
-            let link_type = data[i].link_type;
-            let entity = logicLinkSource.entities.add({
-                id: `link-${index}`,
-                name: `link-${index}`,
-                polyline: {
-                    positions: Cesium.Cartesian3.fromDegreesArrayHeights([
-                        src_lng, src_lat, line_height,
-                        dst_lng, dst_lat, line_height,
-                    ]),
-                    width: 1,
-                    material: colorMap[link_type],
-                },
-            });
-            idx2src_asn[index] = src_asn;
-            idx2dst_asn[index] = dst_asn;
-            let description = "<table class='cesium-infoBox-defaultTable'><tbody>" + "<tr><th>Link</th><td>" + index + "</td></tr>";
-            description += "<tr><th>ASN 1</th><td>" + data[i].src_asn + "</td></tr>";
-            description += "<tr><th>Region 1</th><td>" + data[i].src_country + "</td></tr>";
-            description += "<tr><th>Position</th><td>" + `${src_lat},${dst_lat}` + "</td></tr>";
-            description += "<tr><th>ASN2</th><td>" + data[i].dst_asn + "</td></tr>";
-            description += "<tr><th>Region 2</th><td>" + data[i].dst_country + "</td></tr>";
-            description += "<tr><th>Position</th><td>" + `${dst_lat},${dst_lng}` + "</td></tr>";
-            description += "<tr><th>Type</th><td>" + link_type + "</td></tr>";
-            description += "</tbody></table>";
-            entity.description = description;
-            entity.show = false;
-            nb_link ++;
         }
-        logicNodeSource.entities.resumeEvents();
-        logicLinkSource.entities.resumeEvents();
-        viewer.dataSources.add(logicLinkSource);
-        viewer.dataSources.add(logicNodeSource);
-        console.log(`NB of nodes: ${nb_node}`);
-        console.log(`NB of links: ${nb_link}`);
-    });
+        if (nodeIndex === undefined) {
+            alert("ASN not found!");
+            return;
+        }
+        lastNodeClickedId = nodeIndex;
+        
+        drawSpecificASLogicMap(data, nodeIndex);
 
-    viewer.selectedEntityChanged.addEventListener(function(selectedEntity) {
-        if (Cesium.defined(selectedEntity)) {
-            if (Cesium.defined(selectedEntity.name) && selectedEntity.name.startsWith("ASN")) {
-                let selectedEntityId = selectedEntity.id;
-                selectedEntityId = parseInt(selectedEntityId.replace("ASN-", ""));
-                const logicLinkSource = viewer.dataSources.getByName("LogicLinks")[0];
-                if (logicLinkSource !== undefined) {
-                    const entityCollectionValues = logicLinkSource.entities.values;
-                    for (let i=0; i<entityCollectionValues.length; i++) {
-                        const entity = entityCollectionValues[i];
-                        let entityId = entity.id;
-                        entityId = parseInt(entityId.replace("link-", ""));
-                        const src_asn = idx2src_asn[entityId];
-                        const dst_asn = idx2dst_asn[entityId];
-                        if (src_asn == selectedEntityId || dst_asn == selectedEntityId) {
-                            entity.show = true;
-                        }
-                        else {
-                            entity.show = false;
-                        }
-                    }
-                }
-            }
-        }
-        else {
-            const logicLinkSource = viewer.dataSources.getByName("LogicLinks")[0];
-            if (logicLinkSource !== undefined) {
-                const entityCollectionValues = logicLinkSource.entities.values;
-                for (let i=0; i<entityCollectionValues.length; i++) {
-                    const entity = entityCollectionValues[i];
-                    entity.show = false;
-                }
-            }
-        }
+        viewer.camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(flyToLongitude, flyToLatitude, cameraHeight),
+        });
+        fillLogicLinkInfoBox(nodeIndex);
     });
 }
 
-function tabCable()
+
+function main()
 {
-    // Todo
+    displayLogicNodes();
+    displayLogicLinks();
+    selectLogicLinks();
+
+    // left click event, display the clicked node information
+    const handler = new Cesium.ScreenSpaceEventHandler(scene.canvas);
+    handler.setInputAction((movement) => {
+        clearTimeout(timer);
+        let timeoutID = setTimeout(window.setTimeout(function() {
+            const pick = scene.pick(movement.position);
+            if (Cesium.defined(pick) && Cesium.defined(pick.id)) {
+                const selectObj = pick.id;
+                if (selectObj.type === "Node") {
+                    const nodeIndex = selectObj.index;
+                    lastNodeClickedId = nodeIndex;
+                    fillLogicLinkInfoBox(nodeIndex);
+                    queryForSpecificLogicNodeIndex(nodeIndex);
+                }
+                else if (selectObj.type === "PhyNode") {
+                    const phyNodeIndex = selectObj.index;
+                    lastPhyNodeClickedId = phyNodeIndex;
+                    fillServLocInfoBox(selectObj);
+                    queryForSpecificPhysicalNodeIndex(phyNodeIndex);
+                }
+            }
+            else {
+                document.getElementById("logic-links-infobox").style.visibility = "hidden";
+                document.getElementById("servloc-infobox").style.visibility = "hidden";
+            }
+        }), timeoutInterval);
+    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+    // left double click event, clear the logic view, display the physical view
+    handler.setInputAction((movement) => {
+        clearTimeout(timer);
+        const pick = scene.pick(movement.position);
+        if (Cesium.defined(pick) && Cesium.defined(pick.id) && (pick.id.type === "Node")) {
+            const asn = pick.id.asn;
+            quertForSpecificPhysicalNodeAsn(asn);
+        }
+    }, Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+
+    // right click event, clear the physical view, display the logic view
+    handler.setInputAction((movement) => {
+        document.getElementById("logic-links-infobox").style.visibility = "hidden";
+        document.getElementById("servloc-infobox").style.visibility = "hidden";
+        billboardCollection.removeAll();
+        phyLinkCollection.removeAll();
+        addBillboardCollection.removeAll();
+        addLinkCollection.removeAll();
+        addPointCollection.removeAll();
+        pointCollection.show = true;
+        linkCollection.show = true;
+    }, Cesium.ScreenSpaceEventType.RIGHT_CLICK);
+
+    // mouse over addPhyNode event, display the tipbox
+    handler.setInputAction((movement) => {
+        let selectObj = scene.pick(movement.endPosition);
+        if (Cesium.defined(selectObj) && Cesium.defined(selectObj.id)) {
+            let tipBox = document.getElementById("tipbox");
+            if (selectObj.id.type === "PhyNode") {
+                tipBox.style.visibility = "visible";
+                tipBox.style.left = movement.endPosition.x + 10 + "px";
+                tipBox.style.top = movement.endPosition.y + 10 + "px";
+                tipBox.innerHTML = `ASN: ${selectObj.id.asn}<br>Country: ${selectObj.id.country}<br>Link Type: ${selectObj.id.linkType}`;
+            }
+            else if (selectObj.id.type === "PhyLink") {
+                tipBox.style.visibility = "visible";
+                tipBox.style.left = movement.endPosition.x + 10 + "px";
+                tipBox.style.top = movement.endPosition.y + 10 + "px";
+                tipBox.innerHTML = `Type: ${selectObj.id.linkType}`;
+            }
+            else if (selectObj.id.type === "Node") {
+                tipBox.style.visibility = "visible";
+                tipBox.style.left = movement.endPosition.x + 10 + "px";
+                tipBox.style.top = movement.endPosition.y + 10 + "px";
+                tipBox.innerHTML = `ASN: ${selectObj.id.asn}<br>Type: ${selectObj.id.nodeType}`;
+            }
+            else if (selectObj.id.type === "Link") {
+                tipBox.style.visibility = "visible";
+                tipBox.style.left = movement.endPosition.x + 10 + "px";
+                tipBox.style.top = movement.endPosition.y + 10 + "px";
+                tipBox.innerHTML = `Type: ${selectObj.id.linkType}`;
+            }
+        }
+        else {
+            document.getElementById("tipbox").style.visibility = "hidden";
+        }
+    }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+
+    // expand button, display neighbors of the clicked node
+    logicLinksInfoboxExpandAndCollapse();
+
+    // expand button, display neighbors of the clicked phynode
+    servlocInfoboxExpandAndCollapse();
+
+    // binding enter keyborad event for search-input
+    $("#search-input").on("keyup", function(e) {
+        if (e.key === 'Enter' || e.keyCode === 13) {
+            let queryString = $("#search-input").val();
+            if (queryString.startsWith("AS") && !isNaN(parseInt(queryString.substring(2)))) {
+                const asn = parseInt(queryString.substring(2));
+                searchForSpecificAsn(asn);
+            }
+        }
+    });
+
+    // binding search button event
+    $("#search-button").click(function() {
+        let queryString = $("#search-input").val();
+        if (queryString.startsWith("AS") && !isNaN(parseInt(queryString.substring(2)))) {
+            const asn = parseInt(queryString.substring(2));
+            searchForSpecificAsn(asn);
+        }
+    });
+
+    // display stats
+    displayStatistiscs();
 }

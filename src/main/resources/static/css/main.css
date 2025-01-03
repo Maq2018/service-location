@@ -4,6 +4,10 @@ body {
     background-color: black;
 }
 
+::-webkit-scrollbar {
+    display: none;
+}
+
 #cesiumContainer {
     height: 100%;
     width: 100%;
@@ -21,54 +25,8 @@ body {
     z-index: -1000;
 }
 
-#toolbar {
-    position: fixed;
-    color: white;
-    background: rgba(42, 42, 42, 0.8);
-    padding: 4px;
-    border-radius: 4px;
-    border: 1px solid white;
-    z-index: 1000;
-    top: 100px;
-    right: 10px;
-}
-
-#toolbar input {
-    vertical-align: middle;
-    padding-top: 2px;
-    padding-bottom: 2px;
-}
-
 .cesium-widget-credits {
     display:none !important;
-}
-
-#country-summary {
-    position: fixed;
-    color: white;
-    font: 14px sans-serif;
-    padding: 4px;
-    z-index: 1000;
-    bottom: 10px;
-    left: 10px;
-    background: rgba(255, 255, 255, 0.1);
-    width: 30%;
-    height:25%;
-    overflow-y: auto;
-}
-
-#asn-summary {
-    position: fixed;
-    color: white;
-    font: 14px sans-serif;
-    padding: 4px;
-    z-index: 1000;
-    bottom: 10px;
-    right: 10px;
-    background: rgba(255, 255, 255, 0.1);
-    width: 65%;
-    height: 25%;
-    overflow-y: auto;
 }
 
 table {
@@ -81,10 +39,11 @@ table {
 
 table th, td {
     text-align: center;
-    
+    vertical-align: middle;
 }
 
 tr, th {
+    padding: 4px;
     border-bottom: 1px solid white;
 }
 
@@ -92,61 +51,81 @@ tr:last-child {
     border: none;
 }
 
-caption {
-    font: 24px sans-serif;
-    color: white;
-    padding: 4px;
-    border: 1px solid white;
-    border-bottom: none;
-}
-
-.selectMode {
+#logic-links-infobox {
     position: fixed;
     color: white;
     font: 14px sans-serif;
-    text-align: center;
+    padding: 4px;
     z-index: 1000;
-    top: 10px;
+    top: 200px;
     left: 10px;
-    width: 320px;
-    height:50px;
+    background: rgba(255, 255, 255, 0.1);
+    width: 25%;
+    height: 25%;
+    border: 1px solid white;
+    border-radius: 5px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    visibility: hidden;
 }
 
-.selectMode>ul {
-    width: 320px;
-    height: 50px;
-}
-
-.selectMode>ul>li {
-    list-style: none;
-    float: left;
-    width: 100px;
-    height: 50px;
-    background-color: gray;
-    border-top: 3px solid gray;
-    border-right: 1px solid white;
-    line-height: 50px;
+#logic-links-infobox-header {
+    font: 18px sans-serif;
     color: white;
+    width: 100%;
+    text-align: center;
 }
 
-.selectMode>ul>li:first-child {
-    border-top-left-radius: 10px;
-    border-bottom-left-radius: 10px;
+#logic-links-infobox-body {
+    width: 100%;
+    color: white;
+    font: 14px sans-serif;
+    text-align: center;
 }
 
-.selectMode>ul>li:last-child {
-    border-top-right-radius: 10px;
-    border-bottom-right-radius: 10px;
-    border-right: none;
+#logic-links-infobox-member-header {
+    font: 18px sans-serif;
+    color: white;
+    width: 100%;
+    text-align: center;
 }
 
-
-.selectMode li:hover {
-    opacity: 0.7;
+.logic-links-infobox-member-expand {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    text-align: center;
+    cursor: pointer;
+    border-radius: 5px;
 }
 
-.selectMode li.onSelect {
-    border-top: 3px solid orange;
+.logic-links-infobox-member-expand:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+#logic-links-asn-summary {
+    position: absolute;
+    color: white;
+    font: 14px sans-serif;
+    margin: auto;
+    padding: 4px;
+    z-index: 1000;
+    bottom: 10px;
+    left: 50%;
+    transform: translate(-50%, 0);
+    background: rgba(255, 255, 255, 0.1);
+    width: 52%;
+    height: 25%;
+    overflow-y: auto;
+    border: 1px solid white;
+    border-radius: 5px;
+}
+
+#logic-links-asn-summary-header {
+    font: 18px sans-serif;
+    color: white;
+    width: 100%;
+    text-align: center;
 }
 
 #servloc-infobox {
@@ -156,11 +135,138 @@ caption {
     padding: 4px;
     z-index: 1000;
     top: 200px;
-    left: 10px;
+    right: 10px;
     background: rgba(255, 255, 255, 0.1);
-    width: 30%;
-    height:25%;
+    width: 25%;
+    height: 25%;
+    border: 1px solid white;
+    border-radius: 5px;
     overflow-y: auto;
+    overflow-x: hidden;
     visibility: hidden;
 }
 
+#servloc-infobox-header {
+    font: 18px sans-serif;
+    color: white;
+    width: 100%;
+    text-align: center;
+}
+
+#servloc-infobox-body {
+    width: 100%;
+    color: white;
+    font: 14px sans-serif;
+    text-align: center;
+}
+
+#servloc-infobox-member-header {
+    font: 18px sans-serif;
+    color: white;
+    width: 100%;
+    text-align: center;
+}
+
+.servloc-infobox-member-expand {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    text-align: center;
+    cursor: pointer;
+    border-radius: 5px;
+}
+
+.servloc-infobox-member-expand:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+#tipbox {
+    position:absolute;
+    color: white;
+    font: 14px sans-serif;
+    width: 150px;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.1);
+    border: 1px solid white;
+    visibility: hidden;
+}
+
+.NavigationBar {
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    width: 80%;
+    height: 50px;
+    color: white;
+    text-align: left;
+    z-index: 1000;
+}
+
+.NavigationBar h1 {
+    margin: 0px;
+    padding: 10px;
+}
+
+.search-container {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    padding: 0px 10px;
+    display: flex;
+    align-items: center;
+    border: 1px solid white;
+    border-radius: 5px;
+    z-index: 1000;
+    
+}
+
+#search-input {
+    float: left;
+    margin: 0px;
+    padding: 0px;
+    width: 150px;
+    height: 30px;
+    color: black;
+    font: 14px sans-serif;
+}
+
+#search-button {
+    float: left;
+    margin: 0px;
+    padding: 0px;
+    width: 50px;
+    height: 50px;
+    cursor: pointer;
+}
+
+.select-logic-links {
+    position: absolute;
+    top: 80px;
+    right: 20px;
+    width: 223px;
+    height: 30px;
+    color: white;
+    z-index: 1000;
+    border: 1px solid white;
+    border-radius: 5px;
+    background: rgba(0, 0, 0, 0.1);
+}
+
+#select-logic-links {
+    width: 100%;
+    height: 100%;
+    color: white;
+    background: rgba(0, 0, 0, 0.1);
+    border: none;
+}
+
+select option {
+    color: white;
+    background: rgba(0, 0, 0, 0.1);
+}
+
+
+/* .search-container.active #search-input {
+    width: 200px;
+    opacity: 1;
+} */

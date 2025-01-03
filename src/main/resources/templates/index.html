@@ -9,89 +9,118 @@
   <link rel="stylesheet" href="/css/main.css">
 </head>
 <body>
+  <div class="NavigationBar">
+    <h1>域间路由互联态势感知</h1>
+  </div>
   <div id="cesiumContainer"></div>
   <div id="loadingOverlay"><h1>Loading...</h1></div>
-  <div class="selectMode">
-    <ul>
-      <li id="tab-logic-links" class="onSelect">互联态势</li>
-      <li id="tab-servloc">服务设施</li>
-    </ul>
-  </div>
-  <div id="servloc-display" style="visibility: hidden;">
-    <div id="servloc-infobox">
-      <div id="servloc-infobox-header">
-        <span id="servloc-infobox-close">X</span>
-        <h2>AS服务点位</h2>
+  <div id="logic-links-display">
+    <div class="search-container">
+      <input type="text" id="search-input" placeholder="Search...">
+      <img src="/svg/searchIcon.jpeg" id="search-button">
+    </div>
+    <div class="select-logic-links">
+      <select id="select-logic-links">
+        <option value="ALL">ALL</option>
+        <option value="P2C">P2C</option>
+        <option value="P2P">P2P</option>
+      </select>
+    </div>
+    <div id="logic-links-infobox">
+      <div id="logic-links-infobox-header">
+        <p>自治系统信息</p>
       </div>
-      <div id="servloc-infobox-content">
+      <div id="logic-links-infobox-content">
+        <table>
+          <tbody id="logic-links-infobox-body"> <!-- append content here -->
+          </tbody>
+        </table>
+      </div>
+      <div id="logic-links-infobox-member-header">
+        <p>邻居信息</p>
+      </div>
+      <div id="logic-links-infobox-member-content">
         <table>
           <thead>
             <tr>
-              <th width="20%">ASN</th>
-              <th width="10%"></th>
-              <th width="10%">国家</th>
-              <th width="30%">纬度</th>
-              <th width="30%">经度</th>
+              <th style="width: 10%;">序号</th>
+              <th style="width: 20%;">ASN</th>
+              <th style="width: 30%;">名称</th>
+              <th style="width: 10%;">国家</th>
+              <th style="width: 30%;">关系</th>
             </tr>
           </thead>
-          <tbody id="servloc-infobox-body">
+          <tbody id="logic-links-infobox-member-body"> <!-- append content here -->
+            <tr>
+              <td colspan="5"><button class="logic-links-infobox-member-expand">Expand</button></td>
+            </tr>
           </tbody>
         </table>
       </div>
     </div>
-    <!-- <div id="toolbar">
-      <table>
-        <tbody>
-          <tr>
-            <td>Pixel Range</td>
-            <td>
-              <input type="range" min="1" max="200" step="1" data-bind="value: pixelRange, valueUpdate: 'input'">
-              <input type="text" size="2" data-bind="value: pixelRange">
-            </td>
-          </tr>
-          <tr>
-            <td>Minimum Cluster Size</td>
-            <td>
-              <input type="range" min="2" max="20" step="1" data-bind="value: minimumClusterSize, valueUpdate: 'input'">
-              <input type="text" size="2" data-bind="value: minimumClusterSize">
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div> -->
-    <div id="country-summary">
-      <table>
-        <caption>拥有最多服务点位的国家/地区</caption>
-        <thead>
-          <tr>
-            <th width="10%">序号</th>
-            <th width="10%"></th>
-            <th width="20%">国家</th>
-            <th width="60%">服务点位数量</th>
-          </tr>
-        <tbody id="country-summary-body">
-        </tbody>
-      </table>
+    <div id="servloc-infobox">
+      <div id="servloc-infobox-header">
+        <p>服务设施信息</p>
+      </div>
+      <div id="servloc-infobox-content">
+        <table>
+          <tbody id="servloc-infobox-body"> <!-- append content here -->
+          </tbody>
+        </table>
+      </div>
+      <div id="servloc-infobox-member-header">
+        <p>邻居信息</p>
+      </div>
+      <div id="servloc-infobox-member-content">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 30%;">ASN</th>
+              <th style="width: 30%;">国家</th>
+              <th style="width: 40%;">链路类型</th>
+            </tr>
+          </thead>
+          <tbody id="servloc-infobox-member-body"> <!-- append content here -->
+            <tr>
+              <td colspan="5"><button class="servloc-infobox-member-expand">Expand</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>  
     </div>
-    <div id="asn-summary">
-      <table>
-        <caption>拥有最多服务点位的自治系统</caption>
+
+    <div id="tipbox">
+    </div>
+
+    <div id="logic-links-asn-summary">
+      <div id="logic-links-asn-summary-header">
+        <p>重要自治系统</p>
+      </div>
+      <table style="padding: 5px;">
         <thead>
           <tr>
-            <th width="10%">序号</th>
-            <th width="10%">ASN</th>
-            <th width="20%">Name</th>
-            <th width="20%">机构</th>
-            <th width="10%"></th>
-            <th width="10%">所属国家</th>
-            <th width="20%">服务点位数量</th>
+            <th width="4%" rowspan="2">序号</th>
+            <th width="4%" rowspan="2">ASN</th>
+            <th width="10%" rowspan="2">名称</th>
+            <th width="12%" rowspan="2">机构</th>
+            <th width="4%" rowspan="2"></th>
+            <th width="10%" rowspan="2">国家</th>
+            <th width="56%" colspan="6" style="border-left: 1px solid white;">统计信息</th>
           </tr>
-        <tbody id="asn-summary-body">
+          <tr>
+            <th width="9%" style="border-left: 1px solid white;">Provider</th>
+            <th width="9%">Peer</th>
+            <th width="9%">Customer</th>
+            <th width="9%">前缀数</th>
+            <th width="10%">客户锥大小</th>
+            <th width="10%">客户锥前缀数</th>
+          </tr>
+        </thead>
+        <tbody id="logic-links-asn-summary-body">
         </tbody>
       </table>
     </div>
   </div>
-  
   <script src="/js/main.js"></script>
 </body>
 </html>
