@@ -5,15 +5,177 @@
   <!-- Include the CesiumJS JavaScript and CSS files -->
   <script src="https://cesium.com/downloads/cesiumjs/releases/1.124/Build/Cesium/Cesium.js"></script>
   <script src="/js/jquery-3.7.1.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chroma-js/2.4.2/chroma.min.js"></script>
   <link href="https://cesium.com/downloads/cesiumjs/releases/1.124/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
   <link rel="stylesheet" href="/css/main.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
 <body>
-  <div class="NavigationBar">
-    <h1>域间路由互联态势感知</h1>
+  <nav class="navbar">
+    <!-- 网站名称和导航链接容器 -->
+    <div class="nav-container">
+      <!-- 网站名称 -->
+      <div class="website-name">路由态势展示</div>
+
+      <!-- 导航链接 -->
+      <ul class="nav-links">
+        <li><a href="http://101.6.30.212:18051/vpinfo" class="nav-link">多源探测平台</a></li>
+        <li><a href="http://101.6.8.175:20448/index" class="nav-link active">域间互联态势</a></li>
+        <li><a href="http://101.6.30.212:18051/routeHijack" class="nav-link">路由劫持事件</a></li>
+        <li><a href="http://101.6.30.212:18051/routeLeak" class="nav-link">路由泄露事件</a></li>
+        <li><a href="http://101.6.30.212:18051/rpki" class="nav-link">RPKI系统状态</a></li>
+        <li><a href="http://101.6.30.212:18051/roa" class="nav-link">ROA防护态势</a></li>
+        <li><a href="http://101.6.30.212:18051/rov" class="nav-link">ROV防护态势</a></li>
+        <li><a href="http://101.6.30.212:18051/sav" class="nav-link">SAV防护态势</a></li>
+      </ul>
+    </div>
+  </nav>
+  <div class="search-bar">
+    <i class="fas fa-search search-icon"></i>
+    <input type="text" id="searchBox" class="search-input" placeholder="示例：AS174, AS174-AS6939">
   </div>
-  <div id="cesiumContainer"></div>
-  <div id="loadingOverlay"><h1>Loading...</h1></div>
-  <script src="/js/main.js"></script>
+  <div id="container">
+    <div id="cesiumContainer"></div>
+
+
+
+
+    <div id="slidingbar" class="slidingbar">
+      <div class="slidingbar-header">
+          <span class="slidingbar-title"></span>
+          <span id="closeSlidingbar" class="close-btn">&times;</span>
+      </div>  
+      <!-- 内容区域 -->
+      <div class="slidingbar-content">
+          <div>ASN: <span id="asn"></span></div>
+          <div>Name: <span id="name"></span></div>
+          <div>Organization: <span id="organization"></span></div>
+          <div>Region: <span id="region"></span></div>
+          <div>Cone_Size: <span id="coneSize"></span></div>
+          <div>Cone_Prefix_Size: <span id="conePrefixSize"></span></div>
+          <div>NB (Provider): <span id="nbProvider"></span></div>
+          <div>NB (Peer): <span id="nbPeer"></span></div>
+          <div>NB (Customer): <span id="nbCustomer"></span></div>
+          <div>Prefix Size: <span id="prefixSize"></span></div>
+          <div>Neighbor:</div>
+          <div id="neighborList" class="neighbor-list"></div>
+      </div>
+    </div>
+
+    
+    <div id="slidingbar2" class="slidingbar2">
+      <div class="slidingbar2-header">
+          <span id="slidingbar2-title">Sliding Bar Title</span>
+          <span id="closeSlidingbar2" class="close-btn">&times;</span>
+      </div>
+      <div id="slidingbar2-content" class="slidingbar2-content">
+          <!-- Content will be dynamically generated here -->
+      </div>
+    </div>
+
+    <div id="slidingbar3" class="slidingbar3">
+      <div class="slidingbar3-header">
+          <span id="slidingbar3-title">ASN1-ASN2</span>
+          <span id="closeSlidingbar3" class="close-btn">&times;</span>
+      </div>
+      <div class="slidingbar3-content">
+          <table>
+              <tr><th>ASN1</th><td id="slidingbar3Asn1"></td></tr>
+              <tr><th>Name</th><td id="slidingbar3Name1"></td></tr>
+              <tr><th>Organization</th><td id="slidingbar3Org1"></td></tr>
+              <tr><th>Region</th><td id="slidingbar3Region1"></td></tr>
+              <tr><th>ASN2</th><td id="slidingbar3Asn2"></td></tr>
+              <tr><th>Name</th><td id="slidingbar3Name2"></td></tr>
+              <tr><th>Organization</th><td id="slidingbar3Org2"></td></tr>
+              <tr><th>Region</th><td id="slidingbar3Region2"></td></tr>
+              <tr><th>Relationship</th><td id="slidingbar3Relationship"></td></tr>
+          </table>
+      </div>
+  </div>
+
+
+  <div id="slidingbar4" class="slidingbar4">
+    <div class="slidingbar4-header">
+        <span id="slidingbar4-title">Sidebar Title</span>
+        <span id="closeSlidingbar4" class="close-btn">&times;</span>
+    </div>
+    <div id="slidingbar4Content" class="slidingbar4-content">
+        <!-- Content will be dynamically generated here -->
+    </div>
+  </div>
+
+
+  </div>
+  <div class="sidebarContainer">
+    <!-- 侧边栏 -->
+    <div class="sidebar">
+      <!-- Tab 选项卡 -->
+      <div class="tabs">
+        <button id="logical-button" class="tab-button active" data-tab="logical">逻辑互联</button>
+        <button id="physical-button" class="tab-button" data-tab="physical">物理互联</button>
+      </div>
+
+      <!-- 逻辑互联 Tab 内容 -->
+      <div id="logical" class="tab-content active">
+        <div class="switch-container">
+          <label class="switch">
+            <input id="as-checkbox" type="checkbox">
+            <span class="slider black"></span>
+          </label>
+          <span class="label">AS</span>
+        </div>
+        <div class="switch-container">
+          <label class="switch">
+            <input id="p2p-checkbox" type="checkbox">
+            <span class="slider green"></span>
+          </label>
+          <span class="label">P2P Links</span>
+        </div>
+        <div class="switch-container">
+          <label class="switch">
+            <input id="p2c-checkbox" type="checkbox">
+            <span class="slider blue"></span>
+          </label>
+          <span class="label">P2C Links</span>
+        </div>
+      </div>
+
+      <!-- 物理互联 Tab 内容 -->
+      <div id="physical" class="tab-content">
+        <div class="switch-container">
+          <label class="switch">
+            <input id="facility-checkbox" type="checkbox">
+            <span class="slider"></span>
+          </label>
+          <span class="label">Facility</span>
+        </div>
+        <div class="switch-container">
+          <label class="switch">
+            <input id="landing-points-checkbox" type="checkbox">
+            <span class="slider"></span>
+          </label>
+          <span class="label">Landing Points</span>
+        </div>
+        <div class="switch-container">
+          <label class="switch">
+            <input id="submarine-cable-checkbox" type="checkbox">
+            <span class="slider"></span>
+          </label>
+          <span class="label">Submarine Cable</span>
+        </div>
+        <div class="switch-container">
+          <label class="switch">
+            <input id="long-haul-cable-checkbox" type="checkbox">
+            <span class="slider"></span>
+          </label>
+          <span class="label">Long-haul Cable</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  
+
+  <script type="module" src="/js/main.js"></script>
 </body>
 </html>
