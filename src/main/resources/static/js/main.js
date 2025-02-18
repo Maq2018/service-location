@@ -1,6 +1,5 @@
 // import geoUtils
 import { haversineDistance, areCoordinatesNear } from './geoUtils.js';
-// import chroma from 'chroma-js';
 
 // Configure Cesiom
 Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIxM2MyODI3Zi0yZGIzLTRlOTMtYjg3My0yOGMyYTYxM2U1NjAiLCJpZCI6MjYwODAzLCJpYXQiOjE3MzM3MDgyNjh9.FY-d2_kcOZ4zQOaNZL3_Ta1CFrnb7bB3Rn8C8jsHu3E';
@@ -32,7 +31,7 @@ const ajaxDataType = "json";
 const PRIMTYPE = {
     PHYNODE: "PhyNode",
     CLUSTERNODE: "ClusterNode",
-    SUBCABLE: "SubmarineCable",
+    SUBMARINECABLE: "SubmarineCable",
     LANDCABLE: "LandCable",
     LANDINGPOINT: "LandingPoint",
     LOGICNODE: "LogicNode",
@@ -52,14 +51,22 @@ const SUBVIEWTYPE = {
     LOCAL: "Local",
 }
 
+const QUERYTYPE = {
+    NONE: "None",
+    SINGLE: "Single",
+    TUPLE: "Tuple",
+}
+
 var tmpViewType = VIEWTYPE.LOGICAL;
 var tmpSubViewType = SUBVIEWTYPE.GLOBAL;
+var tmpQueryType = QUERYTYPE.NONE;
+var tmpQuerySingleAS = undefined;
+var tmpQueryASTuple = undefined;
 
 // point collection
 const physicalNodeHeight = 0;
 const phyNodeMinPixelSize = 8, phyNodeMaxPixelSize = 8;
 const phyNodeMinScaleDist = 1e4, phyNodeMaxScaleDist = 8e6, phyNodeMinScaler = 1, phyNodeMaxScaler = 10;
-const physicalNodeArray = [];
 const physicalNodeCollection = scene.primitives.add(new Cesium.PointPrimitiveCollection());
 const physicalNodeLabelCollection = scene.primitives.add(new Cesium.LabelCollection());
 const phyNodeLabelVisMinDistance = 0, phyNodeLabelVisMaxDistance = 100000;
@@ -68,8 +75,8 @@ const phyNodeLabelVisMinDistance = 0, phyNodeLabelVisMaxDistance = 100000;
 const clusterDistance = 100;
 
 // sabmarine cable collection
-const subCableLineWidth = 3;
-const subCableLineCollection = scene.primitives.add(new Cesium.PrimitiveCollection());
+const submarineCableLineWidth = 3;
+const submarineCableLineCollection = scene.primitives.add(new Cesium.PrimitiveCollection());
 
 // land cable collection
 const landCableLineWidth = 3;
@@ -83,8 +90,7 @@ const landingPointCollection = scene.primitives.add(new Cesium.PointPrimitiveCol
 // logic node collection
 const logicNodeHeight = 100;
 const logicNodeCollection = scene.primitives.add(new Cesium.PointPrimitiveCollection());
-const normalPixelSize = 4;
-const minLogicNodePixelSize = 4, maxLogicNodePixelSize = 12, tier1PixelSize = 16;
+const minLogicNodePixelSize = 4, maxLogicNodePixelSize = 12;
 const logicNodeOutlineWidth = 0.3;
 const tier1AS = [3356, 1299, 2914, 6762, 3257, 6453, 6461, 3491, 5511, 12956, 3320, 701, 7018, 6830];
 const logicNodeMinScaleDist = 1e4, logicNodeMaxScaleDist = 8e6, logicNodeMinScaler = 1, logicNodeMaxScaler = 10;
@@ -95,39 +101,44 @@ const logicLinkCollection = scene.primitives.add(new Cesium.PrimitiveCollection(
 const p2cLinkIndex = 0, p2pLinkIndex = 1;
 const logicLinkHeight = 0;
 const minLogicLinkLineWidth = 1, maxLogicLinkLineWidth = 2, p2cLogicLinkAlpha = 0.1, p2pLogicLinkAlpha = 0.05;
-const delayForLoadLogicLink = 5000;
 
-// sub logic node collection
-const subLogicNodeHeight = 0;
-const subLogicNodeCollection = scene.primitives.add(new Cesium.PointPrimitiveCollection());
-const subTargetPixelSize = 12, subNormalPixelSize = 8, subTier1PixelSize = 16;
-const subLogicNodeOutlineWidth = 1;
-const subLogicNodeMinScaleDist = 1e4, subLogicNodeMaxScaleDist = 8e6, subLogicNodeMinScaler = 1, subLogicNodeMaxScaler = 10;
+// local logic node collection
+const localLogicNodeHeight = 0;
+const localTargetLogicNodeCollection = scene.primitives.add(new Cesium.PointPrimitiveCollection());
+const localNbrLogicNodeCollection = scene.primitives.add(new Cesium.PointPrimitiveCollection());
+const minLocalLogicNodePixelSize = 4, maxLocalLogicNodePixelSize = 12;
+const localLogicNodeOutlineWidth = 0.3;
+const localLogicNodeMinScaleDist = 1e4, localLogicNodeMaxScaleDist = 8e6, localLogicNodeMinScaler = 1, localLogicNodeMaxScaler = 10;
 
 // sub logic link collection
-const subLogicLinkCollection = scene.primitives.add(new Cesium.PrimitiveCollection());
-const subP2CLinkIndex = 0, subP2PLinkIndex = 1;
-const subLogicLinkHeight = 0;
-const subMinLogicLinkLineWidth = 1.5, subMaxLogicLinkLineWidth = 2.5, subLogicLinkOutlineWidth = 0.5;
-const subLogicLinkAlpha = 0.3;
+const localLogicLinkCollection = scene.primitives.add(new Cesium.PrimitiveCollection());
+const localP2CLinkIndex = 0, localP2PLinkIndex = 1;
+const localLogicLinkHeight = 0;
+const localMinLogicLinkLineWidth = 1, localMaxLogicLinkLineWidth = 2;
+const localP2CLogicLinkAlpha = 0.3, localP2PLogicLinkAlpha = 0.15;
 
 // pop collection
 const popCollection = scene.primitives.add(new Cesium.PointPrimitiveCollection());
 const popPixelSize = 4, popOutlineWidth = 0.5;
+const popPixelSizeRange = [2, 3, 4];
 const popHeight = 200, facilityHeight = 150;
 const popMinScaleDist = 1e4, popMaxScaleDist = 8e6, popMinScaler = 1, popMaxScaler = 10;
-const subFacilityCollection = scene.primitives.add(new Cesium.PointPrimitiveCollection());
-const facilityOutlineWidth = 0.5;
-const subLandCableLineCollection = scene.primitives.add(new Cesium.PrimitiveCollection());
-const directLinkCollection = scene.primitives.add(new Cesium.PrimitiveCollection());
-const localLandCableLineWidth = 5;
-const directLinkWidth = 3;
+
+// local physical node collection
+const localPhysicalNodeCollection = scene.primitives.add(new Cesium.PointPrimitiveCollection());
+const localPhysicalNodeOutlineWidth = 0.5;
+
+// local land cable collection
+const localLandCableLineCollection = scene.primitives.add(new Cesium.PrimitiveCollection());
+const localDirectLinkCollection = scene.primitives.add(new Cesium.PrimitiveCollection());
+const localLandCableLineWidth = 3;
+const localDirectLinkWidth = 3;
 
 // tab view init timeout
 const tabViewInitTimeout = 10000;
 
 // flyHeight
-const flyHeight = 1e6;
+const flyHeight = 8e6;
 
 class ObjectID {
     constructor(_id, _type) {
@@ -236,8 +247,111 @@ class PoPID extends ObjectID {
     }
 }
 
+/** 
+ * ajax wrapper for promise
+ * @param {Object} options
+ * @return {Promise}
+*/
+function ajaxPromise(options) {
+    return new Promise((resolve, reject) => {
+        $.ajax(options).done(resolve).fail(reject);
+    });
+}
+
+/**
+ * cluster physical nodes by distance
+ * @param {Array} physicalNodeData
+ * @return {Array} clusteredPositions
+ */
+function clustering(physicalNodeData)
+{
+    const clusteredPositions = [];
+    const positions = physicalNodeData.map(dataItem => {
+        return Cesium.Cartesian3.fromDegrees(dataItem.longitude, dataItem.latitude, physicalNodeHeight);
+    });
+    positions.forEach((position, index) => {
+        let clustered = false;
+        for (let i=0; i<clusteredPositions.length; i++) {
+            const clusterPos = clusteredPositions[i];
+            const distance = Cesium.Cartesian3.distance(position, clusterPos.position);
+            if (distance < clusterDistance) {
+                clusterPos.indices.push(index);
+                clusterPos.count ++;
+                clustered = true;
+                break;
+            }
+        }
+        if (!clustered) {
+            clusteredPositions.push({position: position, count: 1, indices: [index]});
+        }
+    });
+    return clusteredPositions;
+}
+
+/**
+ * calculate logic node pixel size by its cone size
+ * @param {number} coneSize 
+ * @param {number} minPixelSize 
+ * @param {number} maxPixelSize 
+ * @param {number} minConeSize 
+ * @param {number} maxConeSize 
+ * @returns {number} pixelSize
+ */
+function calculateLogicNodePixelSize(coneSize, minPixelSize, maxPixelSize, minConeSize, maxConeSize) {
+    return minPixelSize + parseInt((maxPixelSize - minPixelSize) * (coneSize - minConeSize) / (maxConeSize - minConeSize));
+}
+
+/**
+ * generate n colors that are distinguishable to the naked eye using CIELAB color space
+ * @param {number} n 
+ * @returns {Array} colors
+ */
+function generateCielabColors(n) {
+    const colors = [];
+    for (let i = 0; i < n; i++) {
+        const l = 70; // 亮度
+        const a = Math.cos((i / n) * 2 * Math.PI) * 50; // a 分量
+        const b = Math.sin((i / n) * 2 * Math.PI) * 50; // b 分量
+        const color = chroma.lab(l, a, b).hex(); // 转换为 RGB
+        colors.push(color);
+    }
+    return colors;
+}
+
+/**
+ * Get a coordinate around BaseCoord, with a given angle offset alpha and radius
+ * @param {Object} BaseCoord 
+ * @param {number} alpha 
+ * @param {number} radius 
+ * @returns {Object} newCoord
+ */
+function getPoPCoordinate(BaseCoord, alpha, radius) {
+    const a = 6378137.0;
+    const f = 1 / 298.257223563;
+    const b = a * (1 - f);
+    const alphaRad = (alpha * Math.PI) / 180;
+    const latRad = (BaseCoord.latitude * Math.PI) / 180;
+    const lonRad = (BaseCoord.longitude * Math.PI) / 180;
+    const e2 = 1 - (b * b) / (a * a);
+    const N = a / Math.sqrt(1 - e2 * Math.sin(latRad) * Math.sin(latRad));
+    const newLatRad = latRad + (radius * Math.cos(alphaRad)) / N;
+    const newLonRad = lonRad + (radius * Math.sin(alphaRad)) / (N * Math.cos(latRad));
+    const newLat = (newLatRad * 180) / Math.PI;
+    const newLon = (newLonRad * 180) / Math.PI;
+    return {
+        latitude: newLat,
+        longitude: newLon
+    };
+}
+
+
 main();
 
+/**
+ * Entry point for the application
+ * @param
+ * @return {void}
+ */
 function main()
 {
     loadPhysicalNodes();
@@ -246,17 +360,15 @@ function main()
     loadLandCables();
     loadLogicNodes();
     loadLogicLinks();
-    setupEvent();
-    tabController();
-    toggleController();
-    initSpecificASLogicSlidingBar();
-    initSpecificASPhysicalSlidingBar();
-    initSpecificASTupleLogicSlidingBar();
-    initSpecificASTuplePhysicalSlidingBar();
-    initQuery();
+    setupEventListener();
     setTimeout(initLogicalTabView, tabViewInitTimeout);
 }
 
+/**
+ * local physical node info from server, cluster them by distance, create physicalNodeCollection and physicalNodeLabelCollection
+ * @param 
+ * @return {void}
+ */
 function loadPhysicalNodes()
 {
     $.ajax({
@@ -286,7 +398,7 @@ function loadPhysicalNodes()
                 nodeID = new PhysicalNodeID(dataItem.index, PRIMTYPE.PHYNODE, dataItem.name, dataItem.organization, dataItem.latitude, dataItem.longitude, dataItem.city, dataItem.state, dataItem.country, dataItem.source, dataItem.date);
             }
             else {
-                nodeID = new ClusterNodeID(dataItem.index, PRIMTYPE.PHYNODE, dataItem.name, dataItem.organization, dataItem.latitude, dataItem.longitude, dataItem.city, dataItem.state, dataItem.country, dataItem.source, dataItem.date);
+                nodeID = new ClusterNodeID(dataItem.index, PRIMTYPE.CLUSTERNODE, dataItem.name, dataItem.organization, dataItem.latitude, dataItem.longitude, dataItem.city, dataItem.state, dataItem.country, dataItem.source, dataItem.date);
             }
             physicalNodeCollection.add({
                 id : nodeID,
@@ -318,31 +430,13 @@ function loadPhysicalNodes()
     });
 }
 
-function clustering(physicalNodeData)
-{
-    const clusteredPositions = [];
-    const positions = physicalNodeData.map(dataItem => {
-        return Cesium.Cartesian3.fromDegrees(dataItem.longitude, dataItem.latitude, physicalNodeHeight);
-    });
-    positions.forEach((position, index) => {
-        let clustered = false;
-        for (let i=0; i<clusteredPositions.length; i++) {
-            const clusterPos = clusteredPositions[i];
-            const distance = Cesium.Cartesian3.distance(position, clusterPos.position);
-            if (distance < clusterDistance) {
-                clusterPos.indices.push(index);
-                clusterPos.count ++;
-                clustered = true;
-                break;
-            }
-        }
-        if (!clustered) {
-            clusteredPositions.push({position: position, count: 1, indices: [index]});
-        }
-    });
-    return clusteredPositions;
-}
 
+
+/**
+ * load submarine cables from server, create submarineCableLineCollection
+ * @param
+ * @return {void}
+ */
 function loadSubmarineCables() {
     $.ajax({
         url: baseURL + "/submarine-cables/detail",
@@ -365,10 +459,10 @@ function loadSubmarineCables() {
                     const cablePositions = Cesium.Cartesian3.fromDegreesArray(cableDegrees);
                     const cableGeometry = new Cesium.GroundPolylineGeometry({
                         positions: cablePositions,
-                        width: subCableLineWidth,
+                        width: submarineCableLineWidth,
                     });
                     const cableInstance = new Cesium.GeometryInstance({
-                        id: new SubmarineCableID(cable.id, PRIMTYPE.SUBCABLE, cable.name, cable.feature_id, cable.source, cable.date, index),
+                        id: new SubmarineCableID(cable.id, PRIMTYPE.SUBMARINECABLE, cable.name, cable.feature_id, cable.source, cable.date, index),
                         geometry: cableGeometry,
                         attributes: {
                             color: Cesium.ColorGeometryInstanceAttribute.fromColor(Cesium.Color.MIDNIGHTBLUE),
@@ -382,14 +476,19 @@ function loadSubmarineCables() {
                 return;
             }
         }
-        subCableLineCollection.add(new Cesium.GroundPolylinePrimitive({
+        submarineCableLineCollection.add(new Cesium.GroundPolylinePrimitive({
             geometryInstances: cableInstances,
             appearance: new Cesium.PolylineColorAppearance(),
         }));
-        subCableLineCollection.show = false;
+        submarineCableLineCollection.show = false;
     });
 }
 
+/** 
+ * load landing points from server, create landingPointCollection
+ * @param
+ * @return {void}
+*/
 function loadLandingPointCollection() {
     $.ajax({
         url: baseURL + "/landing-points/detail",
@@ -419,6 +518,11 @@ function loadLandingPointCollection() {
     });
 }
 
+/**
+ * load land cables from server, create landCableLineCollection
+ * @param
+ * @return {void}
+ */
 function loadLandCables() {
     $.ajax({
         url: baseURL + "/land-cables/detail",
@@ -439,7 +543,7 @@ function loadLandCables() {
                 const cablePositions = Cesium.Cartesian3.fromDegreesArray(cableDegrees);
                 const cableGeometry = new Cesium.GroundPolylineGeometry({
                     positions: cablePositions,
-                    width: subCableLineWidth,
+                    width: landCableLineWidth,
                 });
                 const cableInstance = new Cesium.GeometryInstance({
                     id: new LandCableID(dataItem.index, PRIMTYPE.LANDCABLE, dataItem.from_city, dataItem.from_state, dataItem.from_country, dataItem.to_city, dataItem.to_state, dataItem.to_country, dataItem.distance, dataItem.date),
@@ -464,6 +568,11 @@ function loadLandCables() {
     });
 }
 
+/** 
+ * load logic nodes from server, create logicNodeCollection
+ * @param
+ * @return {void}
+*/
 function loadLogicNodes() {
     $.ajax({
         url: baseURL + "/logic-nodes/detail",
@@ -485,7 +594,7 @@ function loadLogicNodes() {
             const position = Cesium.Cartesian3.fromDegrees(dataItem.longitude, dataItem.latitude, logicNodeHeight);
             const nodeID = new LogicNodeID(dataItem.index, PRIMTYPE.LOGICNODE, dataItem.asn, dataItem.name, dataItem.organization);
             const asn = dataItem.asn;
-            const pixelSize = minLogicNodePixelSize + parseInt((maxLogicNodePixelSize - minLogicNodePixelSize) * (cone_sizes[index] - minConeSize) / (maxConeSize - minConeSize));
+            const pixelSize = calculateLogicNodePixelSize(cone_sizes[index], minLogicNodePixelSize, maxLogicNodePixelSize, minConeSize, maxConeSize);
             const color = tier1AS.includes(asn) ? Cesium.Color.DARKRED : Cesium.Color.DARKSLATEBLUE;
             logicNodeCollection.add({
                 id : nodeID,
@@ -502,14 +611,12 @@ function loadLogicNodes() {
     });
 }
 
-function ajaxPromise(options) {
-    return new Promise((resolve, reject) => {
-        $.ajax(options).done(resolve).fail(reject);
-    });
-}
-
+/**
+ * load logic links from server, create logicLinkCollection
+ * @param
+ * @return {void}
+ */
 function loadLogicLinks() {
-    console.log("loadLogicLinks begin...");
     ajaxPromise({
         url: baseURL + "/logic-nodes/detail",
         method: ajaxMethod,
@@ -543,15 +650,14 @@ function loadLogicLinks() {
             const srcIdx = dataItem.src_node_index, dstIdx = dataItem.dst_node_index, srcAsn = dataItem.src_asn, dstAsn = dataItem.dst_asn;
             const src_lat = dataItem.src_latitude, src_lon = dataItem.src_longitude, dst_lat = dataItem.dst_latitude, dst_lon = dataItem.dst_longitude;
             const linkType = dataItem.link_type;
-            let width = undefined, tier1InterConn = false;
+            let width = undefined;
             if (tier1AS.includes(srcAsn) && tier1AS.includes(dstAsn)) {
                 width = maxLogicLinkLineWidth;
-                tier1InterConn = true;
             }
             else {
                 width = minLogicLinkLineWidth;
             }
-            const logicLinkInstances = (linkType === "p2c")?p2cLogicLinkInstances:p2pLogicLinkInstances;
+            const logicLinkInstances = (linkType === "p2c") ? p2cLogicLinkInstances : p2pLogicLinkInstances;
             logicLinkInstances.push(new Cesium.GeometryInstance({
                 id: new LogicLinkID(dataItem.index, PRIMTYPE.LOGICLINK, srcIdx, dstIdx, srcAsn, dstAsn, linkType),
                 geometry: new Cesium.PolylineGeometry({
@@ -585,7 +691,12 @@ function loadLogicLinks() {
     });
 }
 
-function setupMouseMoveEvent() {
+/** 
+ * Pop up infobox when mouse move onto certain primitive
+ * @param
+ * @return {void}
+*/
+function setupMouseMoveEventListener() {
     const infoBox = document.createElement('div');
     infoBox.style.position = 'absolute';
     infoBox.style.color = 'white';
@@ -599,8 +710,9 @@ function setupMouseMoveEvent() {
     document.body.appendChild(infoBox);
 
     const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+    // ScreenSpaceEventHandler.MotionEventCallback
     handler.setInputAction(function(movement) {
-        const pickedObject = viewer.scene.pick(movement.endPosition);
+        const pickedObject = viewer.scene.pick(movement.endPosition); // movement: Cesium.ScreenSpaceEventHandler.MotionEvent
         if (Cesium.defined(pickedObject) && Cesium.defined(pickedObject.id)) {
             switch(pickedObject.id.type) {
                 case PRIMTYPE.PHYNODE:
@@ -609,7 +721,7 @@ function setupMouseMoveEvent() {
                 case PRIMTYPE.CLUSTERNODE:
                     infoBox.innerHTML = "<p>Facility: " + pickedObject.id.name + "<br>Organization: " + pickedObject.id.organization + "<br>City: " + pickedObject.id.city + "<br>State: " + pickedObject.id.state + "<br>Country: " + pickedObject.id.country + "</p>";
                     break;
-                case PRIMTYPE.SUBCABLE:
+                case PRIMTYPE.SUBMARINECABLE:
                     infoBox.innerHTML = "<p>Submarine Cable: " + pickedObject.id.name + "<br>Feature ID: " + pickedObject.id.featureID + "</p>";
                     break;
                 case PRIMTYPE.LANDCABLE:
@@ -622,7 +734,7 @@ function setupMouseMoveEvent() {
                     infoBox.innerHTML = "<p>ASN:" + pickedObject.id.asn + "<br>Name: " + pickedObject.id.name + "<br>Organization: " + pickedObject.id.organization + "</p>";
                     break;
                 case PRIMTYPE.LOGICLINK:
-                    infoBox.innerHTML = "<p>SRC: " + pickedObject.id.srcAsn + "<br>DST: " + pickedObject.id.dstAsn + "<br>Link Type: " + pickedObject.id.linkType + "</p>";
+                    infoBox.innerHTML = "<p>SRC: AS" + pickedObject.id.srcAsn + "<br>DST: AS" + pickedObject.id.dstAsn + "<br>Link Type: " + pickedObject.id.linkType + "</p>";
                     break;
                 case PRIMTYPE.POP:
                     infoBox.innerHTML = "<p>ASN: " + pickedObject.id.asn + "<br>latitude: " + pickedObject.id.latitude + "<br>longitude: " + pickedObject.id.longitude + "</p>";
@@ -641,11 +753,25 @@ function setupMouseMoveEvent() {
     }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
 }
 
-function setupEvent() {
-    setupMouseMoveEvent();
+/**
+ * Entry point for event handler setup
+ * @param
+ * @return {void}
+ */
+function setupEventListener() {
+    setupMouseMoveEventListener();
+    setupSlidingBarCloseEventListerer();
+    setupQueryEventListener();
+    setupTabEventListener();
+    setupToggleEventListener();
 }
 
-function asToggleController() {
+/**
+ * Set up listener to control the visibility of logic node collection under different sub view type
+ * @param 
+ * @return {void}
+ */
+function logicNodeToggleController() {
     let asCheckBox = document.getElementById("as-checkbox");
     asCheckBox.addEventListener("change", function(event) {
         switch(tmpSubViewType) {
@@ -653,7 +779,7 @@ function asToggleController() {
                 logicNodeCollection.show = (event.target.checked)?true:false;
                 break;
             case SUBVIEWTYPE.LOCAL:
-                subLogicNodeCollection.show = (event.target.checked)?true:false;
+                localNbrLogicNodeCollection.show = (event.target.checked)?true:false;
                 break;
             default:
                 break;
@@ -661,7 +787,12 @@ function asToggleController() {
     });
 }
 
-function p2pToggleController() {
+/**
+ * Set up listener to control the visibility of p2p link collection under different sub view type
+ * @param
+ * @return {void}
+ */
+function p2pLinksToggleController() {
     let p2pCheckBox = document.getElementById("p2p-checkbox");
     p2pCheckBox.addEventListener("change", function(event) {
         switch(tmpSubViewType) {
@@ -669,7 +800,7 @@ function p2pToggleController() {
                 logicLinkCollection.get(p2pLinkIndex).show = (event.target.checked)?true:false;
                 break;
             case SUBVIEWTYPE.LOCAL:
-                subLogicLinkCollection.get(subP2PLinkIndex).show = (event.target.checked)?true:false;
+                localLogicLinkCollection.get(localP2PLinkIndex).show = (event.target.checked)?true:false;
                 break;
             default:
                 break;
@@ -677,7 +808,12 @@ function p2pToggleController() {
     });
 }
 
-function p2cToggleController() {
+/**
+ * Set up listener to control the visibility of p2c link collection under different sub view type
+ * @param
+ * @return {void}
+ */
+function p2cLinksToggleController() {
     let p2cCheckBox = document.getElementById("p2c-checkbox");
     p2cCheckBox.addEventListener("change", function(event) {
         switch(tmpSubViewType) {
@@ -685,7 +821,7 @@ function p2cToggleController() {
                 logicLinkCollection.get(p2cLinkIndex).show = (event.target.checked)?true:false;
                 break;
             case SUBVIEWTYPE.LOCAL:
-                subLogicLinkCollection.get(subP2CLinkIndex).show = (event.target.checked)?true:false;
+                localLogicLinkCollection.get(localP2CLinkIndex).show = (event.target.checked)?true:false;
                 break;
             default:
                 break;
@@ -693,18 +829,23 @@ function p2cToggleController() {
     });
 }
 
-function facilityToggleController() {
+/**
+ * Set up listener to control the visibility of physical node collection under different sub view type
+ * @param
+ * @return {void}
+ */
+function physicalNodeToggleController() {
     let facilityCheckBox = document.getElementById("facility-checkbox");
     facilityCheckBox.addEventListener("change", function(event) {
         switch(tmpSubViewType) {
             case SUBVIEWTYPE.GLOBAL:
-                physicalNodeCollection.show = (event.target.checked)?true:false;
-                physicalNodeLabelCollection.show = (event.target.checked)?true:false;
+                physicalNodeCollection.show = (event.target.checked) ? true : false;
+                physicalNodeLabelCollection.show = (event.target.checked) ? true : false;
                 break;
             case SUBVIEWTYPE.LOCAL:
                 // Todo: physical local view
-                physicalNodeCollection.show = (event.target.checked)?true:false;
-                physicalNodeLabelCollection.show = (event.target.checked)?true:false;
+                physicalNodeCollection.show = (event.target.checked) ? true : false;
+                physicalNodeLabelCollection.show = (event.target.checked) ? true : false;
                 break;
             default:
                 break;
@@ -712,16 +853,21 @@ function facilityToggleController() {
     });
 }
 
+/**
+ * Set up listener to control the visibility of submarine cable collection under different sub view type
+ * @param
+ * @return {void}
+ */
 function submarineCableToggleController() {
     let subCableCheckBox = document.getElementById("submarine-cable-checkbox");
     subCableCheckBox.addEventListener("change", function(event) {
         switch(tmpSubViewType) {
             case SUBVIEWTYPE.GLOBAL:
-                subCableLineCollection.show = (event.target.checked)?true:false;
+                submarineCableLineCollection.show = (event.target.checked)?true:false;
                 break;
             case SUBVIEWTYPE.LOCAL:
                 // Todo: submarine cable local view
-                subCableLineCollection.show = (event.target.checked)?true:false;
+                submarineCableLineCollection.show = (event.target.checked)?true:false;
                 break;
             default:
                 break;
@@ -729,6 +875,11 @@ function submarineCableToggleController() {
     });
 }
 
+/**
+ * Set up listener to control the visibility of landing point collection under different sub view type
+ * @param
+ * @return {void}
+ */
 function landingPointToggleController() {
     let landingPointCheckBox = document.getElementById("landing-points-checkbox");
     landingPointCheckBox.addEventListener("change", function(event) {
@@ -746,6 +897,11 @@ function landingPointToggleController() {
     });
 }
 
+/**
+ * Set up listener to control the visibility of land cable collection under different sub view type
+ * @param
+ * @return {void}
+ */
 function landCableToggleController() {
     let landCableCheckBox = document.getElementById("long-haul-cable-checkbox");
     landCableCheckBox.addEventListener("change", function(event) {
@@ -763,16 +919,72 @@ function landCableToggleController() {
     });
 }
 
-function toggleController() {
-    asToggleController();
-    p2cToggleController();
-    p2pToggleController();
-    facilityToggleController();
+/**
+ * Entry point for toggle controller setup
+ * @param
+ * @return {void}
+ */
+function setupToggleEventListener() {
+    logicNodeToggleController();
+    p2cLinksToggleController();
+    p2pLinksToggleController();
+    physicalNodeToggleController();
     submarineCableToggleController();
     landingPointToggleController();
     landCableToggleController();
 }
 
+/**
+ * Close sliding bar that is open
+ * @param
+ * @return {void}
+ */
+function closeSlidingBar() {
+    const slidingBarIds = ['slidingbar', 'slidingbar2', 'slidingbar3', 'slidingbar4'];
+    const closeButtonIds = ['closeSlidingbar', 'closeSlidingbar2', 'closeSlidingbar3', 'closeSlidingbar4'];
+    closeButtonIds.forEach((id, index) => {
+        const slidingBar = document.getElementById(slidingBarIds[index]);
+        // const closeSlidingbarBtn = document.getElementById(id);
+        if (slidingBar.classList.contains('open')) { slidingBar.classList.remove('open'); }
+    });
+}
+
+/**
+ * Clear primitive collection for local view, close sliding bar
+ * @param
+ * @return {void}
+ */
+function clearLocalView() {
+
+    closeSlidingBar();
+
+    localNbrLogicNodeCollection.removeAll();
+    localNbrLogicNodeCollection.show = false;
+
+    localTargetLogicNodeCollection.removeAll();
+    localTargetLogicNodeCollection.show = false;
+
+    localLogicLinkCollection.removeAll();
+    localLogicLinkCollection.show = false;
+
+    popCollection.removeAll();
+    popCollection.show = false;
+
+    localPhysicalNodeCollection.removeAll();
+    localPhysicalNodeCollection.show = false;
+    
+    localLandCableLineCollection.show = false;
+    localLandCableLineCollection.removeAll();
+
+    localDirectLinkCollection.show = false;
+    localDirectLinkCollection.removeAll();
+}
+
+/**
+ * Find toggle element by id, set its checked state and trigger change event
+ * @param {string} toggleId 
+ * @param {boolean} isChecked 
+ */
 function setToggleState(toggleId, isChecked) {
     const toggle = document.getElementById(toggleId);
       if (toggle) {
@@ -785,8 +997,35 @@ function setToggleState(toggleId, isChecked) {
       }
 }
 
-function logicalTablController() {
+/**
+ * display logical view, set toggle state of items (as, p2p links, p2c links)
+ * @param
+ * @return {void}
+ * Todo: switch view and subview according to tmpQueryType
+ */
+function logicalTabController() {
+    tmpViewType = VIEWTYPE.LOGICAL;
     clearLocalView();
+
+    switch(tmpSubViewType) {
+        case SUBVIEWTYPE.GLOBAL:
+            break;
+        case SUBVIEWTYPE.LOCAL:
+            switch(tmpQueryType) {
+                case QUERYTYPE.SINGLE:
+                    querySingleASLogic(tmpQuerySingleAS);
+                    break;
+                case QUERYTYPE.TUPLE:
+                    queryASTupleLogic(tmpQueryASTuple.asn1, tmpQueryASTuple.asn2);
+                    break;
+                default:
+                    break;
+            }
+            break;
+        default:
+            break;
+    }
+
     setToggleState("as-checkbox", true);
     setToggleState("p2p-checkbox", true);
     setToggleState("p2c-checkbox", true);
@@ -796,8 +1035,35 @@ function logicalTablController() {
     setToggleState("long-haul-cable-checkbox", false);
 }
 
+/**
+ * display physical view, set toggle state of items (facility, submarine cables, landing points, land cables)
+ * @param
+ * @return {void}
+ * Todo: switch view and subview according to tmpQueryType
+ */
 function physicalTabController() {
+    tmpViewType = VIEWTYPE.PHYSICAL;
     clearLocalView();
+
+    switch(tmpSubViewType) {
+        case SUBVIEWTYPE.GLOBAL:
+            break;
+        case SUBVIEWTYPE.LOCAL:
+            switch(tmpQueryType) {
+                case QUERYTYPE.SINGLE:
+                    querySingleASPhysical(tmpQuerySingleAS);
+                    break;
+                case QUERYTYPE.TUPLE:
+                    queryASTuplePhysical(tmpQueryASTuple.asn1, tmpQueryASTuple.asn2);
+                    break;
+                default:
+                    break;
+            }
+            break;
+        default:
+            break;
+    }
+
     setToggleState("as-checkbox", false);
     setToggleState("p2p-checkbox", false);
     setToggleState("p2c-checkbox", false);
@@ -807,7 +1073,13 @@ function physicalTabController() {
     setToggleState("long-haul-cable-checkbox", false);
 }
 
-function tabController() {
+/**
+ * Set up event listener for tab button click, which controlls switching view type and sub view type
+ * @param
+ * @return {void}
+ * Todo: switch view and subview according to tmpQueryType
+ */
+function setupTabEventListener() {
     const tabButtons = document.querySelectorAll('.tab-button');
     const tabContents = document.querySelectorAll('.tab-content');
 
@@ -824,13 +1096,9 @@ function tabController() {
 
             switch(targetTab) {
                 case "logical":
-                    tmpViewType = VIEWTYPE.LOGICAL;
-                    tmpSubViewType = SUBVIEWTYPE.GLOBAL;
-                    logicalTablController();
+                    logicalTabController();
                     break;
                 case "physical":
-                    tmpViewType = VIEWTYPE.PHYSICAL;
-                    tmpSubViewType = SUBVIEWTYPE.GLOBAL;
                     physicalTabController();
                     break;
                 default:
@@ -840,24 +1108,51 @@ function tabController() {
     });
 }
 
+/**
+ * init global logical tab view
+ * @param
+ * @return {void}
+ * Todo: set view type, sub view type and query type
+ */
 function initLogicalTabView() {
+    tmpViewType = VIEWTYPE.LOGICAL;
+    tmpSubViewType = SUBVIEWTYPE.GLOBAL;
+    tmpQueryType = QUERYTYPE.NONE;
+    tmpQuerySingleAS = undefined;
+    tmpQueryASTuple = undefined;
     let button = document.getElementById("logical-button");
     const event = new Event('click', { bubbles: true });
     button.dispatchEvent(event);
 }
 
+/**
+ * init global physical tab view
+ * @param
+ * @return {void}
+ * Todo: set view type, sub view type and query type
+ */
 function initPhysicalTabView() {
+    tmpViewType = VIEWTYPE.PHYSICAL;
+    tmpSubViewType = SUBVIEWTYPE.GLOBAL;
+    tmpQueryType = QUERYTYPE.NONE;
+    tmpQuerySingleAS = undefined;
+    tmpQueryASTuple = undefined;
     let button = document.getElementById("physical-button");
     const event = new Event('click', { bubbles: true });
     button.dispatchEvent(event);
 }
 
-function initQuery() {
+/**
+ * Set up event listener for searchBox, press Enter to check format and start query.
+ * @param
+ * @return {void}
+ */
+function setupQueryEventListener() {
     $('#searchBox').on('keypress', function(e) {
         if (e.which === 13) {
             var input = $(this).val().trim();
             if (input.includes('-')) {
-                var regex = /^AS\d+-AS\d+$/; // 正则表达式：AS数字-AS数字
+                var regex = /^AS\d+-AS\d+$/; // regular expression：AS[number]-AS[number]
                 if (regex.test(input)) {
                     var asns = input.split('-');
                     var asn1 = parseInt(asns[0].replace("AS", ""), 10);
@@ -873,14 +1168,14 @@ function initQuery() {
                 }
             }
             else {
-                var regex = /^AS\d+$/;
+                var regex = /^AS\d+$/; // regular expression：AS[number]
                 if (regex.test(input)) {
                     var asn = parseInt(input.replace("AS", ""), 10);
                     if (isNaN(asn)) {
                         alert("Invalid input: " + input + ". Please input like this: AS3356.");
                         return;
                     }
-                    querySpecificAS(asn);
+                    querySingleAS(asn);
                 }
                 else {
                     alert("Invalid input: " + input + ". Please input like this: AS3356.");
@@ -890,72 +1185,125 @@ function initQuery() {
     });
 }
 
-function initSpecificASLogicSlidingBar() {
+/**
+ * Entry point for query single AS
+ * @param {number} asn 
+ */
+function querySingleAS(asn) {
+    switch(tmpViewType) {
+        case VIEWTYPE.LOGICAL:
+            querySingleASLogic(asn);
+            break;
+        case VIEWTYPE.PHYSICAL:
+            querySingleASPhysical(asn);
+            break;
+        default:
+            break;
+    }
+}
+
+/**
+ * Entry point for query AS Tuple
+ * @param {number} asn1 
+ * @param {number} asn2 
+ */
+function queryASTuple(asn1, asn2) {
+    switch(tmpViewType) {
+        case VIEWTYPE.LOGICAL:
+            queryASTupleLogic(asn1, asn2);
+            break;
+        case VIEWTYPE.PHYSICAL:
+            queryASTuplePhysical(asn1, asn2);
+            break;
+        default:
+            break;
+    }
+}
+
+/**
+ * Set up event listener for close button of sliding bar
+ * @param
+ * @return {void}
+ */
+function setupSlidingBarCloseEventListerer() {
+    setupSingleASLogicSlidingBarCloseEventListener();
+    setupSingleASPhysicalSlidingBarCloseEventListener();
+    setupASTupleLogicSlidingBarCloseEventListener();
+    setupASTuplePhysicalSlidingBarCloseEventListener();
+}
+
+/**
+ * Set up event listener for close button of single-AS-logical-view mode sliding bar
+ * @param
+ * @return {void} 
+ */
+function setupSingleASLogicSlidingBarCloseEventListener() {
     const closeSlidingbarBtn = document.getElementById('closeSlidingbar');
     closeSlidingbarBtn.addEventListener('click', () => {
         const slidingbar = document.getElementById('slidingbar');
         slidingbar.classList.remove('open');
-        subLogicNodeCollection.removeAll();
-        subLogicLinkCollection.removeAll();
-        subLogicNodeCollection.show = false;
-        subLogicLinkCollection.show = false;
+        localTargetLogicNodeCollection.removeAll();
+        localNbrLogicNodeCollection.removeAll();
+        localLogicLinkCollection.removeAll();
+        localTargetLogicNodeCollection.show = false;
+        localNbrLogicNodeCollection.show = false;
+        localLogicLinkCollection.show = false;
+        tmpSubViewType = SUBVIEWTYPE.GLOBAL;
+        tmpQueryType = QUERYTYPE.NONE;
+        tmpQuerySingleAS = undefined;
+        tmpQueryASTuple = undefined;
         initLogicalTabView();
     });
 }
 
-function setSpecificASLogicSlidingBarBaseInfo(_title, _asn, _name, _organization, _country, _cone_size, _cone_prefix_size, _degree_provider, _degree_peer, _degree_customer, _prefix_size) {
-    const slidingbarTitle = document.querySelector('.slidingbar-title');
-    const asn = document.getElementById('asn');
-    const name = document.getElementById('name');
-    const organization = document.getElementById('organization');
-    const region = document.getElementById('region');
-    const coneSize = document.getElementById('coneSize');
-    const conePrefixSize = document.getElementById('conePrefixSize');
-    const nbProvider = document.getElementById('nbProvider');
-    const nbPeer = document.getElementById('nbPeer');
-    const nbCustomer = document.getElementById('nbCustomer');
-    const prefixSize = document.getElementById('prefixSize');
+/**
+ * query single AS, show its logical view and sliding bar
+ * @param {number} asn
+ * @return {void} 
+ */
+function querySingleASLogic(asn) {
 
-    slidingbarTitle.textContent = _title;
-    asn.textContent = "" + _asn;
-    name.textContent = _name;
-    organization.textContent = _organization;
-    region.textContent = _country;
-    coneSize.textContent = _cone_size;
-    conePrefixSize.textContent = _cone_prefix_size;
-    nbProvider.textContent = _degree_provider;
-    nbPeer.textContent = _degree_peer;
-    nbCustomer.textContent = _degree_customer;
-    prefixSize.textContent = _prefix_size;
-}
-
-function setSpecificASLogicNeighborList(neighborListData) {
+    function setSingleASLogicSlidingBarBaseInfo(_title, _asn, _name, _organization, _country, _cone_size, _cone_prefix_size, _degree_provider, _degree_peer, _degree_customer, _prefix_size) {
+        const slidingbarTitle = document.querySelector('.slidingbar-title');
+        const asn = document.getElementById('asn');
+        const name = document.getElementById('name');
+        const organization = document.getElementById('organization');
+        const region = document.getElementById('region');
+        const coneSize = document.getElementById('coneSize');
+        const conePrefixSize = document.getElementById('conePrefixSize');
+        const nbProvider = document.getElementById('nbProvider');
+        const nbPeer = document.getElementById('nbPeer');
+        const nbCustomer = document.getElementById('nbCustomer');
+        const prefixSize = document.getElementById('prefixSize');
     
-    const neighborList = document.getElementById('neighborList');
-    neighborList.innerHTML = ''; // 清空列表
-    neighborListData.forEach((neighbor, index) => {
-        const neighborItem = document.createElement('div');
-        neighborItem.className = 'neighbor-item';
-        neighborItem.textContent = `${index + 1}. ASN: ${neighbor.asn}, Relationship: ${neighbor.relationship}`;
-        neighborList.appendChild(neighborItem);
-    });
-}
-
-function showSpecificASLogicSlidingBar() {
-    const slidingbar = document.getElementById('slidingbar');
-    slidingbar.classList.add('open');
-}
-
-function querySpecificASLogic(asn) {
-
-    closeSlidingBar();
-    tmpSubViewType = SUBVIEWTYPE.LOCAL;
-    logicNodeCollection.show = false;
-    logicLinkCollection.get(p2cLinkIndex).show = false;
-    logicLinkCollection.get(p2pLinkIndex).show = false;
-    subLogicLinkCollection.removeAll();
-    subLogicNodeCollection.removeAll();
-    const neighborListData = [];
+        slidingbarTitle.textContent = _title;
+        asn.textContent = "" + _asn;
+        name.textContent = _name;
+        organization.textContent = _organization;
+        region.textContent = _country;
+        coneSize.textContent = _cone_size;
+        conePrefixSize.textContent = _cone_prefix_size;
+        nbProvider.textContent = _degree_provider;
+        nbPeer.textContent = _degree_peer;
+        nbCustomer.textContent = _degree_customer;
+        prefixSize.textContent = _prefix_size;
+    }
+    
+    function setSingleASLogicSlidingBarNbrList(neighborListData) {
+        const neighborList = document.getElementById('neighborList');
+        neighborList.innerHTML = ''; // 清空列表
+        neighborListData.forEach((neighbor, index) => {
+            const neighborItem = document.createElement('div');
+            neighborItem.className = 'neighbor-item';
+            neighborItem.textContent = `${index + 1}. ASN: ${neighbor.asn}, Relationship: ${neighbor.relationship}`;
+            neighborList.appendChild(neighborItem);
+        });
+    }
+    
+    function showSpecificASLogicSlidingBar() {
+        const slidingbar = document.getElementById('slidingbar');
+        slidingbar.classList.add('open');
+    }
 
     function addSingleNode(index, asn, name, organization, latitude, longitude, cone_size, isSearchTarget) {
         let pixelSize = undefined, color = undefined;
@@ -965,17 +1313,42 @@ function querySpecificASLogic(asn) {
         else {
             color = tier1AS.includes(asn) ? Cesium.Color.DARKRED : Cesium.Color.DARKSLATEBLUE;
         }
-        pixelSize = minLogicNodePixelSize + parseInt((maxLogicNodePixelSize - minLogicNodePixelSize) * (Math.log(cone_size) - minGlobalConeSize) / (maxGlobalConeSize - minGlobalConeSize));
-        subLogicNodeCollection.add({
-            id : new LogicNodeID(index, PRIMTYPE.LOGICNODE, asn, name, organization),
-            position : Cesium.Cartesian3.fromDegrees(longitude, latitude, subLogicNodeHeight),
-            pixelSize : pixelSize,
-            color : color,
-            outlineColor : Cesium.Color.BLACK,
-            outlineWidth : subLogicNodeOutlineWidth,
-            scaleByDistance: new Cesium.NearFarScalar(subLogicNodeMinScaleDist, subLogicNodeMaxScaler, subLogicNodeMaxScaleDist, subLogicNodeMinScaler),
-        });
+        pixelSize = calculateLogicNodePixelSize(Math.log(cone_size), minLocalLogicNodePixelSize, maxLocalLogicNodePixelSize, minGlobalConeSize, maxGlobalConeSize);
+        if (!isSearchTarget) {
+            localNbrLogicNodeCollection.add({
+                id : new LogicNodeID(index, PRIMTYPE.LOGICNODE, asn, name, organization),
+                position : Cesium.Cartesian3.fromDegrees(longitude, latitude, localLogicNodeHeight),
+                pixelSize : pixelSize,
+                color : Cesium.Color.fromAlpha(color, 0.5),
+                outlineColor : Cesium.Color.fromAlpha(Cesium.Color.BLACK, 0.5),
+                outlineWidth : localLogicNodeOutlineWidth,
+                scaleByDistance: new Cesium.NearFarScalar(localLogicNodeMinScaleDist, localLogicNodeMaxScaler, localLogicNodeMaxScaleDist, localLogicNodeMinScaler),
+            });
+        }
+        else {
+            localTargetLogicNodeCollection.add({
+                id : new LogicNodeID(index, PRIMTYPE.LOGICNODE, asn, name, organization),
+                position : Cesium.Cartesian3.fromDegrees(longitude, latitude, localLogicNodeHeight),
+                pixelSize : pixelSize,
+                color : color,
+                outlineColor : Cesium.Color.BLACK,
+                outlineWidth : localLogicNodeOutlineWidth,
+                scaleByDistance: new Cesium.NearFarScalar(localLogicNodeMinScaleDist, localLogicNodeMaxScaler, localLogicNodeMaxScaleDist, localLogicNodeMinScaler),
+            });
+        }
     }
+
+    closeSlidingBar();
+    tmpSubViewType = SUBVIEWTYPE.LOCAL;
+    tmpQueryType = QUERYTYPE.SINGLE;
+    tmpQuerySingleAS = asn;
+    logicNodeCollection.show = false;
+    logicLinkCollection.get(p2cLinkIndex).show = false;
+    logicLinkCollection.get(p2pLinkIndex).show = false;
+    localLogicLinkCollection.removeAll();
+    localNbrLogicNodeCollection.removeAll();
+    localTargetLogicNodeCollection.removeAll();
+    const neighborListData = [];
 
     ajaxPromise({
         url: baseURL + "/logic-nodes/detail",
@@ -994,10 +1367,10 @@ function querySpecificASLogic(asn) {
             return;
         }
         addSingleNode(data[0].index, data[0].asn, data[0].name, data[0].organization, data[0].latitude, data[0].longitude, data[0].cone_size, true);
-        setSpecificASLogicSlidingBarBaseInfo("AS" + asn + "详细信息", data[0].asn, data[0].name, data[0].organization, data[0].country, data[0].cone_size, data[0].cone_prefix_size, data[0].degree_provider, data[0].degree_peer, data[0].degree_customer, data[0].prefix_size);
-        // camera.flyTo({
-        //     destination: Cesium.Cartesian3.fromDegrees(data[0].longitude, data[0].latitude, flyHeight)
-        // });
+        setSingleASLogicSlidingBarBaseInfo("AS" + asn + "详细信息", data[0].asn, data[0].name, data[0].organization, data[0].country, data[0].cone_size, data[0].cone_prefix_size, data[0].degree_provider, data[0].degree_peer, data[0].degree_customer, data[0].prefix_size);
+        camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(data[0].longitude, data[0].latitude, flyHeight)
+        });
         return ajaxPromise({
             url: baseURL + "/logic-links/detail",
             method: ajaxMethod,
@@ -1041,36 +1414,36 @@ function querySpecificASLogic(asn) {
             // add link
             let width = undefined;
             if (tier1AS.includes(srcAsn) && tier1AS.includes(dstAsn)) {
-                width = subMaxLogicLinkLineWidth;
+                width = localMaxLogicLinkLineWidth;
             }
             else {
-                width = subMinLogicLinkLineWidth;
+                width = localMinLogicLinkLineWidth;
             }
             const logicLinkInstances = (linkType === "p2c")?p2cLogicLinkInstances:p2pLogicLinkInstances;
             logicLinkInstances.push(new Cesium.GeometryInstance({
                 id: new LogicLinkID(dataItem.index, PRIMTYPE.LOGICLINK, srcIdx, dstIdx, srcAsn, dstAsn, linkType),
                 geometry: new Cesium.PolylineGeometry({
                     vertexFormat : Cesium.VertexFormat.POSITION_ONLY,
-                    positions: Cesium.Cartesian3.fromDegreesArrayHeights([src_lon, src_lat, subLogicLinkHeight, dst_lon, dst_lat, subLogicLinkHeight]),
+                    positions: Cesium.Cartesian3.fromDegreesArrayHeights([src_lon, src_lat, localLogicLinkHeight, dst_lon, dst_lat, localLogicLinkHeight]),
                     width: width,
                 }),
             }));
         });
-        subLogicLinkCollection.add(new Cesium.Primitive({
+        localLogicLinkCollection.add(new Cesium.Primitive({
             geometryInstances: p2cLogicLinkInstances,
             appearance: new Cesium.PolylineMaterialAppearance({
                 translucent: true,
                 material: Cesium.Material.fromType("Color", {
-                    color: Cesium.Color.BLUE.withAlpha(subLogicLinkAlpha),
+                    color: Cesium.Color.BLUE.withAlpha(localP2CLogicLinkAlpha),
                 })
             }),
         }));
-        subLogicLinkCollection.add(new Cesium.Primitive({
+        localLogicLinkCollection.add(new Cesium.Primitive({
             geometryInstances: p2pLogicLinkInstances,
             appearance: new Cesium.PolylineMaterialAppearance({
                 translucent: true,
                 material: Cesium.Material.fromType("Color", {
-                    color: Cesium.Color.GREEN.withAlpha(subLogicLinkAlpha),
+                    color: Cesium.Color.GREEN.withAlpha(localP2PLogicLinkAlpha),
                 })
             }),
         }));
@@ -1095,135 +1468,150 @@ function querySpecificASLogic(asn) {
         data.forEach(dataItem => {
             addSingleNode(dataItem.index, dataItem.asn, dataItem.name, dataItem.organization, dataItem.latitude, dataItem.longitude, dataItem.cone_size, false);
         });
-        subLogicNodeCollection.show = true;
-        subLogicLinkCollection.show = true;
-        setSpecificASLogicNeighborList(neighborListData);
+        localNbrLogicNodeCollection.show = true;
+        localLogicLinkCollection.show = true;
+        localTargetLogicNodeCollection.show = true;
+        setSingleASLogicSlidingBarNbrList(neighborListData);
         showSpecificASLogicSlidingBar();
-        setToggleState("as-checkbox", true);
-        setToggleState("p2p-checkbox", true);
-        setToggleState("p2c-checkbox", true);
     });
 }
 
-function initSpecificASPhysicalSlidingBar() {
+/**
+ * Set up event listener for close button of single-AS-physical-view mode sliding bar
+ * @param
+ * @return {void}
+ */
+function setupSingleASPhysicalSlidingBarCloseEventListener() {
     const closeSlidingbarBtn = document.getElementById('closeSlidingbar2');
     closeSlidingbarBtn.addEventListener('click', () => {
         const slidingbar = document.getElementById('slidingbar2');
         slidingbar.classList.remove('open');
         popCollection.removeAll();
-        subFacilityCollection.removeAll();
-        directLinkCollection.removeAll();
+        localPhysicalNodeCollection.removeAll();
+        localDirectLinkCollection.removeAll();
         popCollection.show = false;
-        subFacilityCollection.show = false;
-        directLinkCollection.show = false;
+        localPhysicalNodeCollection.show = false;
+        localDirectLinkCollection.show = false;
+        tmpSubViewType = SUBVIEWTYPE.GLOBAL;
+        tmpQueryType = QUERYTYPE.NONE;
+        tmpQuerySingleAS = undefined;
+        tmpQueryASTuple = undefined;
         initPhysicalTabView();
     });
 }
 
-function showSpecificASPhysicalSlidingBar() {
-    const slidingbar = document.getElementById('slidingbar2');
-    slidingbar.classList.add('open');
-}
+/**
+ * query single AS, show its physical view and sliding bar
+ * @param {number} asn 
+ * @return {void}
+ */
+function querySingleASPhysical(asn) {
 
-function setSpecificASPhysicalSlidingBarInfo(asn, pops, facilities, queryData) {
-
-    function findFacilityByID(facilityID, qData) {
-        let res = undefined;
-        for (let i=0; i<qData.length; i++) {
-            if (qData[i].index === facilityID) {
-                res = qData[i];
-                break;
+    function showSingleASPhysicalSlidingBar() {
+        const slidingbar = document.getElementById('slidingbar2');
+        slidingbar.classList.add('open');
+    }
+    
+    function setSingleASPhysicalSlidingBarInfo(asn, pops, facilities, queryData) {
+    
+        function findFacilityByID(facilityID, qData) {
+            let res = undefined;
+            for (let i=0; i<qData.length; i++) {
+                if (qData[i].index === facilityID) {
+                    res = qData[i];
+                    break;
+                }
             }
+            return res;
         }
-        return res;
+    
+        const slidingbarTitle = document.getElementById('slidingbar2-title');
+        slidingbarTitle.textContent = "AS" + asn + " PoP信息";
+    
+        const slidingBarContent = document.getElementById('slidingbar2-content');
+        slidingBarContent.innerHTML = '';
+    
+        pops.forEach((pop, index) => {
+            const table = document.createElement('table');
+            const row1 = table.insertRow();
+            const th1 = document.createElement('th');
+            th1.textContent = 'PoP';
+            row1.appendChild(th1);
+            const td1 = document.createElement('td');
+            td1.textContent = `${pop[0]},${pop[1]}`;
+            td1.style.cursor = 'pointer'; // Make it look clickable
+            td1.addEventListener('click', () => {
+                // Call CesiumJS camera flyTo method
+                if (camera) {
+                    camera.flyTo({
+                        destination: Cesium.Cartesian3.fromDegrees(pop[1], pop[0], flyHeight) // Adjust height as needed
+                    });
+                } else {
+                    alert('Cesium viewer is not initialized.');
+                }
+            });
+            row1.appendChild(td1);
+    
+            const divider = document.createElement('hr');
+            slidingBarContent.appendChild(divider);
+    
+            // Facility row
+            const row2 = table.insertRow();
+            const th2 = document.createElement('th');
+            th2.textContent = 'Facility';
+            row2.appendChild(th2);
+            const td2 = document.createElement('td');
+            const facility = findFacilityByID(facilities[index], queryData);
+            td2.textContent =  facility ? facility.name : 'Unknown';
+            row2.appendChild(td2);
+    
+            if (facility) {
+                // Additional rows if facility exists
+                const row3 = table.insertRow();
+                const th3 = document.createElement('th');
+                th3.textContent = 'Organization';
+                row3.appendChild(th3);
+                const td3 = document.createElement('td');
+                td3.textContent = facility.organization;
+                row3.appendChild(td3);
+    
+                const row4 = table.insertRow();
+                const th4 = document.createElement('th');
+                th4.textContent = 'City';
+                row4.appendChild(th4);
+                const td4 = document.createElement('td');
+                td4.textContent = facility.city;
+                row4.appendChild(td4);
+    
+                const row5 = table.insertRow();
+                const th5 = document.createElement('th');
+                th5.textContent = 'State';
+                row5.appendChild(th5);
+                const td5 = document.createElement('td');
+                td5.textContent = facility.state;
+                row5.appendChild(td5);
+    
+                const row6 = table.insertRow();
+                const th6 = document.createElement('th');
+                th6.textContent = 'Region';
+                row6.appendChild(th6);
+                const td6 = document.createElement('td');
+                td6.textContent = facility.country;
+                row6.appendChild(td6);
+            }
+            slidingBarContent.appendChild(table);
+        });
     }
 
-    const slidingbarTitle = document.getElementById('slidingbar2-title');
-    slidingbarTitle.textContent = "AS" + asn + " PoP信息";
-
-    const slidingBarContent = document.getElementById('slidingbar2-content');
-    slidingBarContent.innerHTML = '';
-
-    pops.forEach((pop, index) => {
-        const table = document.createElement('table');
-        const row1 = table.insertRow();
-        const th1 = document.createElement('th');
-        th1.textContent = 'PoP';
-        row1.appendChild(th1);
-        const td1 = document.createElement('td');
-        td1.textContent = `${pop[0]},${pop[1]}`;
-        td1.style.cursor = 'pointer'; // Make it look clickable
-        td1.addEventListener('click', () => {
-            // Call CesiumJS camera flyTo method
-            if (camera) {
-                camera.flyTo({
-                    destination: Cesium.Cartesian3.fromDegrees(pop[1], pop[0], flyHeight) // Adjust height as needed
-                });
-            } else {
-                alert('Cesium viewer is not initialized.');
-            }
-        });
-        row1.appendChild(td1);
-
-        const divider = document.createElement('hr');
-        slidingBarContent.appendChild(divider);
-
-        // Facility row
-        const row2 = table.insertRow();
-        const th2 = document.createElement('th');
-        th2.textContent = 'Facility';
-        row2.appendChild(th2);
-        const td2 = document.createElement('td');
-        const facility = findFacilityByID(facilities[index], queryData);
-        td2.textContent =  facility ? facility.name : 'Unknown';
-        row2.appendChild(td2);
-
-        if (facility) {
-            // Additional rows if facility exists
-            const row3 = table.insertRow();
-            const th3 = document.createElement('th');
-            th3.textContent = 'Organization';
-            row3.appendChild(th3);
-            const td3 = document.createElement('td');
-            td3.textContent = facility.organization;
-            row3.appendChild(td3);
-
-            const row4 = table.insertRow();
-            const th4 = document.createElement('th');
-            th4.textContent = 'City';
-            row4.appendChild(th4);
-            const td4 = document.createElement('td');
-            td4.textContent = facility.city;
-            row4.appendChild(td4);
-
-            const row5 = table.insertRow();
-            const th5 = document.createElement('th');
-            th5.textContent = 'State';
-            row5.appendChild(th5);
-            const td5 = document.createElement('td');
-            td5.textContent = facility.state;
-            row5.appendChild(td5);
-
-            const row6 = table.insertRow();
-            const th6 = document.createElement('th');
-            th6.textContent = 'Region';
-            row6.appendChild(th6);
-            const td6 = document.createElement('td');
-            td6.textContent = facility.country;
-            row6.appendChild(td6);
-        }
-        slidingBarContent.appendChild(table);
-    });
-}
-
-function querySpecificASPhysical(asn) {
     // Todo
     closeSlidingBar();
     tmpSubViewType = SUBVIEWTYPE.LOCAL;
+    tmpQueryType = QUERYTYPE.SINGLE;
+    tmpQuerySingleAS = asn;
     popCollection.removeAll();
-    subFacilityCollection.removeAll();
-    directLinkCollection.removeAll();
-    subLandCableLineCollection.removeAll();
+    localPhysicalNodeCollection.removeAll();
+    localDirectLinkCollection.removeAll();
+    localLandCableLineCollection.removeAll();
 
     const popPos = [];
     const popIds = [];
@@ -1277,13 +1665,13 @@ function querySpecificASPhysical(asn) {
         data.forEach(dataItem => {
             const position = Cesium.Cartesian3.fromDegrees(dataItem.longitude, dataItem.latitude, facilityHeight);
             const nodeID = new PhysicalNodeID(dataItem.index, PRIMTYPE.PHYNODE, dataItem.name, dataItem.organization, dataItem.latitude, dataItem.longitude, dataItem.city, dataItem.state, dataItem.country, dataItem.source, dataItem.date);
-            subFacilityCollection.add({
+            localPhysicalNodeCollection.add({
                 id : nodeID,
                 position : position,
                 pixelSize : phyNodeMinPixelSize,
                 color : Cesium.Color.RED,
                 outlineColor : Cesium.Color.BLACK,
-                outlineWidth : facilityOutlineWidth,
+                outlineWidth : localPhysicalNodeOutlineWidth,
                 scaleByDistance : new Cesium.NearFarScalar(phyNodeMinScaleDist, phyNodeMaxScaler, phyNodeMaxScaleDist, phyNodeMinScaler),
             });
             facilityMap.set(dataItem.index, dataItem);
@@ -1326,7 +1714,7 @@ function querySpecificASPhysical(asn) {
 
                 const linkGeometry = new Cesium.PolylineGeometry({
                     positions: Cesium.Cartesian3.fromDegreesArray([sourceLon, sourceLat, targetLon, targetLat]),
-                    width: directLinkWidth,
+                    width: localDirectLinkWidth,
                 });
                 const linkInstance = new Cesium.GeometryInstance({
                     geometry: linkGeometry,
@@ -1337,7 +1725,7 @@ function querySpecificASPhysical(asn) {
                 directLinkInstances.push(linkInstance);
             }
         });
-        directLinkCollection.add(new Cesium.Primitive({
+        localDirectLinkCollection.add(new Cesium.Primitive({
             geometryInstances: directLinkInstances,
             appearance: new Cesium.PolylineColorAppearance({
                 translucent: true,
@@ -1345,66 +1733,79 @@ function querySpecificASPhysical(asn) {
         }));
 
         popCollection.show = true;
-        subFacilityCollection.show = true;
-        directLinkCollection.show = true;
-        setSpecificASPhysicalSlidingBarInfo(asn, popPos, facilityIds, data);
-        showSpecificASPhysicalSlidingBar();
+        localPhysicalNodeCollection.show = true;
+        localDirectLinkCollection.show = true;
+
+        setToggleState("facility-checkbox", false);
+        setToggleState("submarine-cable-checkbox", false);
+        setToggleState("landing-points-checkbox", false);
+        setToggleState("long-haul-cable-checkbox", false);
+
+        setSingleASPhysicalSlidingBarInfo(asn, popPos, facilityIds, data);
+        showSingleASPhysicalSlidingBar();
     });
 }
 
-function querySpecificAS(asn) {
-    switch(tmpViewType) {
-        case VIEWTYPE.LOGICAL:
-            querySpecificASLogic(asn);
-            break;
-        case VIEWTYPE.PHYSICAL:
-            querySpecificASPhysical(asn);
-            break;
-        default:
-            break;
-    }
-}
-
-function setSpecificASTupleLogicSlidingBarBaseInfo(srcNode, dstNode, link_type) {
-    document.getElementById('slidingbar3-title').textContent = "AS" + srcNode.asn + " - AS" + dstNode.asn + " 互联信息";
-    
-    document.getElementById('slidingbar3Asn1').textContent = srcNode.asn;
-    document.getElementById('slidingbar3Name1').textContent = srcNode.name;
-    document.getElementById('slidingbar3Org1').textContent = srcNode.organization;
-    document.getElementById('slidingbar3Region1').textContent = srcNode.country;
-
-    document.getElementById('slidingbar3Asn2').textContent = dstNode.asn;
-    document.getElementById('slidingbar3Name2').textContent = dstNode.name;
-    document.getElementById('slidingbar3Org2').textContent = dstNode.organization;
-    document.getElementById('slidingbar3Region2').textContent = dstNode.country;
-
-    document.getElementById('slidingbar3Relationship').textContent = link_type;
-}
-
-function showSpecificASTupleLogicSlidingBar() {
-    document.getElementById('slidingbar3').classList.add('open');
-}
-
-function initSpecificASTupleLogicSlidingBar() {
+/**
+ * Set up event listener for close button of AS-tuple-logical-view mode sliding bar
+ * @param
+ * @return {void}
+ */
+function setupASTupleLogicSlidingBarCloseEventListener() {
     const closeSlidingbarBtn = document.getElementById('closeSlidingbar3');
     closeSlidingbarBtn.addEventListener('click', () => {
         document.getElementById('slidingbar3').classList.remove('open');
-        subLogicNodeCollection.removeAll();
-        subLogicLinkCollection.removeAll();
-        subLogicNodeCollection.show = false;
-        subLogicLinkCollection.show = false;
+        localTargetLogicNodeCollection.removeAll();
+        localNbrLogicNodeCollection.removeAll();
+        localLogicLinkCollection.removeAll();
+        localTargetLogicNodeCollection.show = false;
+        localNbrLogicNodeCollection.show = false;
+        localLogicLinkCollection.show = false;
+        tmpSubViewType = SUBVIEWTYPE.GLOBAL;
+        tmpQueryType = QUERYTYPE.NONE;
+        tmpQuerySingleAS = undefined;
+        tmpQueryASTuple = undefined;
         initLogicalTabView();
     });
 }
 
+/**
+ * query AS tuple, show its logical view and sliding bar
+ * @param {number} asn1 
+ * @param {number} asn2 
+ * @return {void}
+ */
 function queryASTupleLogic(asn1, asn2) {
+
+    function setASTupleLogicSlidingBarBaseInfo(srcNode, dstNode, link_type) {
+        document.getElementById('slidingbar3-title').textContent = "AS" + srcNode.asn + " - AS" + dstNode.asn + " 互联信息";
+        
+        document.getElementById('slidingbar3Asn1').textContent = srcNode.asn;
+        document.getElementById('slidingbar3Name1').textContent = srcNode.name;
+        document.getElementById('slidingbar3Org1').textContent = srcNode.organization;
+        document.getElementById('slidingbar3Region1').textContent = srcNode.country;
+    
+        document.getElementById('slidingbar3Asn2').textContent = dstNode.asn;
+        document.getElementById('slidingbar3Name2').textContent = dstNode.name;
+        document.getElementById('slidingbar3Org2').textContent = dstNode.organization;
+        document.getElementById('slidingbar3Region2').textContent = dstNode.country;
+    
+        document.getElementById('slidingbar3Relationship').textContent = link_type;
+    }
+    
+    function showASTupleLogicSlidingBar() {
+        document.getElementById('slidingbar3').classList.add('open');
+    }
+
     closeSlidingBar();
     tmpSubViewType = SUBVIEWTYPE.LOCAL;
+    tmpQueryType = QUERYTYPE.TUPLE;
+    tmpQueryASTuple = { asn1: asn1, asn2: asn2 };
     logicNodeCollection.show = false;
     logicLinkCollection.get(p2cLinkIndex).show = false;
     logicLinkCollection.get(p2pLinkIndex).show = false;
-    subLogicLinkCollection.removeAll();
-    subLogicNodeCollection.removeAll();
+    localLogicLinkCollection.removeAll();
+    localNbrLogicNodeCollection.removeAll();
     let linkIndex, src_asn, dst_asn, link_type;
 
     ajaxPromise({
@@ -1450,23 +1851,24 @@ function queryASTupleLogic(asn1, asn2) {
         });
         const srcPos = [srcNode.latitude, srcNode.longitude];
         const dstPos = [dstNode.latitude, dstNode.longitude];
-        subLogicNodeCollection.add({
+        const srcConeSize = srcNode.cone_size, dstConeSize = dstNode.cone_size;
+        localNbrLogicNodeCollection.add({
             id : new LogicNodeID(srcNode.index, PRIMTYPE.LOGICNODE, srcNode.asn, srcNode.name, srcNode.organization),
-            position : Cesium.Cartesian3.fromDegrees(srcNode.longitude, srcNode.latitude, subLogicNodeHeight),
-            pixelSize : tier1AS.includes(srcNode.asn) ? subTier1PixelSize : subTargetPixelSize,
+            position : Cesium.Cartesian3.fromDegrees(srcNode.longitude, srcNode.latitude, localLogicNodeHeight),
+            pixelSize : calculateLogicNodePixelSize(Math.log(srcConeSize), minLocalLogicNodePixelSize, maxLocalLogicNodePixelSize, minGlobalConeSize, maxGlobalConeSize),
             color : tier1AS.includes(srcNode.asn) ? Cesium.Color.DARKRED : Cesium.Color.DARKSLATEBLUE,
             outlineColor : Cesium.Color.BLACK,
-            outlineWidth : subLogicNodeOutlineWidth,
-            scaleByDistance: new Cesium.NearFarScalar(subLogicNodeMinScaleDist, subLogicNodeMaxScaler, subLogicNodeMaxScaleDist, subLogicNodeMinScaler),
+            outlineWidth : localLogicNodeOutlineWidth,
+            scaleByDistance: new Cesium.NearFarScalar(localLogicNodeMinScaleDist, localLogicNodeMaxScaler, localLogicNodeMaxScaleDist, localLogicNodeMinScaler),
         });
-        subLogicNodeCollection.add({
+        localNbrLogicNodeCollection.add({
             id : new LogicNodeID(dstNode.index, PRIMTYPE.LOGICNODE, dstNode.asn, dstNode.name, dstNode.organization),
-            position : Cesium.Cartesian3.fromDegrees(dstNode.longitude, dstNode.latitude, subLogicNodeHeight),
-            pixelSize : tier1AS.includes(dstNode.asn) ? subTier1PixelSize : subTargetPixelSize,
+            position : Cesium.Cartesian3.fromDegrees(dstNode.longitude, dstNode.latitude, localLogicNodeHeight),
+            pixelSize : calculateLogicNodePixelSize(Math.log(dstConeSize), minLocalLogicNodePixelSize, maxLocalLogicNodePixelSize, minGlobalConeSize, maxGlobalConeSize),
             color : tier1AS.includes(dstNode.asn) ? Cesium.Color.DARKRED : Cesium.Color.DARKSLATEBLUE,
             outlineColor : Cesium.Color.BLACK,
-            outlineWidth : subLogicNodeOutlineWidth,
-            scaleByDistance: new Cesium.NearFarScalar(subLogicNodeMinScaleDist, subLogicNodeMaxScaler, subLogicNodeMaxScaleDist, subLogicNodeMinScaler),
+            outlineWidth : localLogicNodeOutlineWidth,
+            scaleByDistance: new Cesium.NearFarScalar(localLogicNodeMinScaleDist, localLogicNodeMaxScaler, localLogicNodeMaxScaleDist, localLogicNodeMinScaler),
         });
         const p2clogicLinkInstances = [], p2plogicLinkInstances = [];
         const logicLinkInstances = (link_type === "p2c")?p2clogicLinkInstances:p2plogicLinkInstances;
@@ -1474,35 +1876,41 @@ function queryASTupleLogic(asn1, asn2) {
             id: new LogicLinkID(linkIndex, PRIMTYPE.LOGICLINK, srcNode.index, dstNode.index, srcNode.asn, dstNode.asn, link_type),
             geometry: new Cesium.PolylineGeometry({
                 vertexFormat : Cesium.VertexFormat.POSITION_ONLY,
-                positions: Cesium.Cartesian3.fromDegreesArrayHeights([srcPos[1], srcPos[0], subLogicLinkHeight, dstPos[1], dstPos[0], subLogicLinkHeight]),
-                width: tier1AS.includes(srcNode.asn) && tier1AS.includes(dstNode.asn) ? subMaxLogicLinkLineWidth : subMinLogicLinkLineWidth,
+                positions: Cesium.Cartesian3.fromDegreesArrayHeights([srcPos[1], srcPos[0], localLogicLinkHeight, dstPos[1], dstPos[0], localLogicLinkHeight]),
+                width: tier1AS.includes(srcNode.asn) && tier1AS.includes(dstNode.asn) ? localMaxLogicLinkLineWidth : localMinLogicLinkLineWidth,
             }),
         }));
-        subLogicLinkCollection.add(new Cesium.Primitive({
+        localLogicLinkCollection.add(new Cesium.Primitive({
             geometryInstances: p2clogicLinkInstances,
             appearance: new Cesium.PolylineMaterialAppearance({
                 translucent: true,
                 material: Cesium.Material.fromType("Color", {
-                    color: Cesium.Color.BLUE.withAlpha(subLogicLinkAlpha),
+                    color: Cesium.Color.BLUE.withAlpha(localP2CLogicLinkAlpha),
                 })
             }),
         }));
-        subLogicLinkCollection.add(new Cesium.Primitive({
+        localLogicLinkCollection.add(new Cesium.Primitive({
             geometryInstances: p2plogicLinkInstances,
             appearance: new Cesium.PolylineMaterialAppearance({
                 translucent: true,
                 material: Cesium.Material.fromType("Color", {
-                    color: Cesium.Color.GREEN.withAlpha(subLogicLinkAlpha),
+                    color: Cesium.Color.GREEN.withAlpha(localP2PLogicLinkAlpha),
                 })
             }),
         }));
-        subLogicNodeCollection.show = true;
-        subLogicLinkCollection.show = true;
-        setSpecificASTupleLogicSlidingBarBaseInfo(srcNode, dstNode, link_type);
-        showSpecificASTupleLogicSlidingBar();
+        localNbrLogicNodeCollection.show = true;
+        localLogicLinkCollection.show = true;
+        setASTupleLogicSlidingBarBaseInfo(srcNode, dstNode, link_type);
+        showASTupleLogicSlidingBar();
     });
 }
 
+/**
+ * query AS tuple, show its physical view and sliding bar
+ * @param {number} asn1 
+ * @param {number} asn2 
+ * @return {void}
+ */
 function queryASTuplePhysical(asn1, asn2) {
 
     function adjustPoPFacility(popItem1, popItem2, facilityMap) {
@@ -1519,12 +1927,162 @@ function queryASTuplePhysical(asn1, asn2) {
         return [facilityId1, facilityId2];
     }
 
+    function drawPoP(popIndex, facilityID, popMap, facilityMap, cityMap, facilityId2Angle, cityId2Angle, radius, colors, directLinkInstances) {
+        const alphaOffset = 45;
+        const popItem = popMap.get(popIndex);
+        let  popCoordinate = undefined;
+        let sourceLat = undefined, sourceLon = undefined;
+        if (facilityID !== -1) {
+            const facilityItem = facilityMap.get(facilityID);
+            popCoordinate = getPoPCoordinate({latitude: facilityItem.latitude, longitude: facilityItem.longitude}, facilityId2Angle.get(facilityID), radius);
+            facilityId2Angle.set(facilityID, facilityId2Angle.get(facilityID) + alphaOffset);
+            sourceLat = facilityItem.latitude, sourceLon = facilityItem.longitude;
+        }
+        else {
+            const cityID = popItem.city_id;
+            const cityItem = cityMap.get(cityID);
+            popCoordinate = getPoPCoordinate({latitude: cityItem.latitude, longitude: cityItem.longitude}, cityId2Angle.get(cityID), radius);
+            cityId2Angle.set(cityID, cityId2Angle.get(cityID) + alphaOffset);
+            sourceLat = cityItem.latitude, sourceLon = cityItem.longitude;
+        }
+        
+        const maxRange = Math.min(colors.length, 3) // only support 3 colors
+        const offsets = [0, -0.05, 0.05];
+        const heightOffset = [20, 10, 0];
+        for (let i = 0; i < maxRange; i++) {
+            const position = Cesium.Cartesian3.fromDegrees(popCoordinate.longitude, popCoordinate.latitude, popHeight + heightOffset[i]);
+            let popID = undefined, outlineColor = Cesium.Color.TRANSPARENT, outlineWidth = 0;
+            if (i === (maxRange - 1)) {
+                popID = new PoPID(popItem.index, PRIMTYPE.POP, popItem.asn, popCoordinate.latitude, popCoordinate.longitude, popItem.facility_id, popItem.city_id, popItem.landing_point_id, popItem.distance);
+                outlineColor = Cesium.Color.BLACK;
+                outlineWidth = popOutlineWidth;
+            }
+            popCollection.add({
+                id: popID,
+                show: true,
+                position: position,
+                pixelSize: popPixelSizeRange[i],
+                color: colors[i],
+                outlineColor: outlineColor,
+                outlineWidth: outlineWidth,
+                scaleByDistance: new Cesium.NearFarScalar(popMinScaleDist, popMaxScaler, popMaxScaleDist, popMinScaler),
+            });
+            const linkGeomotry = new Cesium.PolylineGeometry({
+                width: localDirectLinkWidth,
+                positions: Cesium.Cartesian3.fromDegreesArray([sourceLon + offsets[i], sourceLat, popCoordinate.longitude + offsets[i], popCoordinate.latitude]),
+            });
+            directLinkInstances.push(new Cesium.GeometryInstance({
+                geometry: linkGeomotry,
+                attributes: {
+                    color: Cesium.ColorGeometryInstanceAttribute.fromColor(colors[i]),
+                },
+            }));
+        }
+    }
+
+    function setASTuplePhysicalSlidingBarInfo(phyLinkIds, popMap, facilityMap, asn1, asn2) {
+
+        function addPoP(table, popIndex, lIndex) {
+            const latitude1 = popMap.get(popIndex).latitude, longitude1 = popMap.get(popIndex).longitude;
+            const pop1Row = table.insertRow();
+            const pop1Header = document.createElement('th');
+            pop1Header.textContent = `PoP${lIndex}`;
+            pop1Row.appendChild(pop1Header);
+            const pop1Data = document.createElement('td');
+            pop1Data.textContent = `${latitude1},${longitude1}`;
+            pop1Row.appendChild(pop1Data);
+            pop1Data.addEventListener('click', () => {
+                // Call CesiumJS camera flyTo method
+                if (camera) {
+                    camera.flyTo({
+                        destination: Cesium.Cartesian3.fromDegrees(longitude1, latitude1, flyHeight) // Adjust height as needed
+                    });
+                } else {
+                    alert('Cesium viewer is not initialized.');
+                }
+            });
+        }
+    
+        function addASN(table, popIndex, lIndex) {
+            const asn = popMap.get(popIndex).asn;
+            const asnRow = table.insertRow();
+            const asnHeader = document.createElement('th');
+            asnHeader.textContent = `ASN${lIndex}`;
+            asnRow.appendChild(asnHeader);
+            const asnData = document.createElement('td');
+            asnData.textContent = asn;
+            asnRow.appendChild(asnData);
+        }
+    
+        function addFacility(table, popIndex, lIndex) {
+            const facility1Row = table.insertRow();
+            const facility1Header = document.createElement('th');
+            facility1Header.textContent = `facility${lIndex}`;
+            facility1Row.appendChild(facility1Header);
+            const facility1Data = document.createElement('td');
+            if (popMap.get(popIndex).facility_id !== -1) {
+                const facility = facilityMap.get(popMap.get(popIndex).facility_id);
+                facility1Data.textContent = facility.name;
+            } else {
+                facility1Data.textContent = 'unknown';
+            }
+            facility1Row.appendChild(facility1Data);
+        }
+    
+        function addLocation(table, popIndex, lIndex) {
+            const location1Row = table.insertRow();
+            const location1Header = document.createElement('th');
+            location1Header.textContent = `location${lIndex}`;
+            location1Row.appendChild(location1Header);
+            const location1Data = document.createElement('td');
+            if (popMap.get(popIndex).facility_id !== -1) {
+                const facility = facilityMap.get(popMap.get(popIndex).facility_id);
+                location1Data.textContent = `${facility.city}, ${facility.state}, ${facility.country}`;
+            }
+            else {
+                location1Data.textContent = 'unknown';
+            }
+            location1Row.appendChild(location1Data);
+        }
+    
+        const slidingbarTitle = document.getElementById('slidingbar4-title');
+        slidingbarTitle.textContent = "AS" + asn1 + " - AS" + asn2 + " 互联信息";
+        const slidingbar4Content = document.getElementById('slidingbar4Content');
+        slidingbar4Content.innerHTML = '';
+        phyLinkIds.forEach((link, index) => {
+            const table = document.createElement('table');
+    
+            // Link Index Row (Span 2 columns)
+            const linkIndexRow = table.insertRow();
+            const linkIndexCell = document.createElement('th');
+            linkIndexCell.textContent = `link ${index + 1}`;
+            linkIndexCell.colSpan = 2;
+            linkIndexCell.className = 'link-index';
+            linkIndexRow.appendChild(linkIndexCell);
+            
+            for (let i = 1; i < 3; i++) {
+                addPoP(table, link[i-1], i);
+                addASN(table, link[i-1], i);
+                addFacility(table, link[i-1], i);
+                addLocation(table, link[i-1], i);
+            }
+            slidingbar4Content.appendChild(table);
+        });
+    }
+
+    function showASTuplePhysicalSlidingBar() {
+        const slidingbar = document.getElementById('slidingbar4');
+        slidingbar.classList.add('open');
+    }
+
     closeSlidingBar();
     tmpSubViewType = SUBVIEWTYPE.LOCAL;
+    tmpQueryType = QUERYTYPE.TUPLE;
+    tmpQueryASTuple = { asn1: asn1, asn2: asn2 };
     popCollection.removeAll();
-    subFacilityCollection.removeAll();
-    subLandCableLineCollection.removeAll();
-    directLinkCollection.removeAll();
+    localPhysicalNodeCollection.removeAll();
+    localLandCableLineCollection.removeAll();
+    localDirectLinkCollection.removeAll();
 
     const phyLinkIds = [];
     const linkCableIds = new Array();
@@ -1538,14 +2096,6 @@ function queryASTuplePhysical(asn1, asn2) {
     const facilityMap = new Map();
     const cableMap = new Map();
     const cityMap = new Map();
-
-    function fromRandomDark(options) {
-        options = Cesium.defaultValue(options, {});
-        options.maximumRed = Cesium.defaultValue(options.maximumRed, 0.5);
-        options.maximumGreen = Cesium.defaultValue(options.maximumGreen, 0.5);
-        options.maximumBlue = Cesium.defaultValue(options.maximumBlue, 0.5);
-        return Cesium.Color.fromRandom(options);
-    }
         
     ajaxPromise({
         url: baseURL + "/phy-links/detail",
@@ -1620,13 +2170,13 @@ function queryASTuplePhysical(asn1, asn2) {
             facilityMap.set(dataItem.index, dataItem);
             const position = Cesium.Cartesian3.fromDegrees(dataItem.longitude, dataItem.latitude, facilityHeight);
             const nodeID = new PhysicalNodeID(dataItem.index, PRIMTYPE.PHYNODE, dataItem.name, dataItem.organization, dataItem.latitude, dataItem.longitude, dataItem.city, dataItem.state, dataItem.country, dataItem.source, dataItem.date);
-            subFacilityCollection.add({
+            localPhysicalNodeCollection.add({
                 id : nodeID,
                 position : position,
                 pixelSize : phyNodeMaxPixelSize,
                 color : Cesium.Color.RED,
                 outlineColor : Cesium.Color.BLACK,
-                outlineWidth : facilityOutlineWidth,
+                outlineWidth : localPhysicalNodeOutlineWidth,
                 scaleByDistance : new Cesium.NearFarScalar(phyNodeMinScaleDist, phyNodeMaxScaler, phyNodeMaxScaleDist, phyNodeMinScaler),
             });
         });
@@ -1661,13 +2211,14 @@ function queryASTuplePhysical(asn1, asn2) {
             dataType: ajaxDataType
         });
     }).then(function(response) {
-        if (response === undefined) { return; }
+        if (response === undefined) { initPhysicalTabView(); return; }
         const data = response.data, dataLength = data.length, status = response.status, message = response.message;
         if (status !== "ok" && cityIds.length !== 0) {
             console.error("Failed to load land cables: " + message);
+            initPhysicalTabView();
             return;
         }
-        if (dataLength === 0 && cityIds.length !== 0) { return; }
+        if (dataLength === 0 && cityIds.length !== 0) { initPhysicalTabView(); return; }
         data.forEach(dataItem => {
             cityMap.set(dataItem.index, dataItem);
         });
@@ -1685,18 +2236,33 @@ function queryASTuplePhysical(asn1, asn2) {
 
         const popDrawFlag = new Map();
         const directLinkInstances = [];
-        const colorList = generateCielabColors(phyLinkIds.length);
+        const cielabColorList = generateCielabColors(phyLinkIds.length);
+        const colorList = cielabColorList.map(color => Cesium.Color.fromCssColorString(color));
+
+        function getColors(popIndex) {
+            const colors = [];
+            phyLinkIds.forEach((link, linkIndex) => {
+                const srcPoPIndex = link[0], dstPoPIndex = link[1];
+                if (srcPoPIndex === popIndex || dstPoPIndex === popIndex) {
+                    colors.push(colorList[linkIndex]);
+                }
+            });
+            return colors;
+        }
+
         phyLinkIds.forEach((link, linkIndex) => {
-            const color = Cesium.Color.fromCssColorString(colorList[linkIndex]);
+            const linkColor = colorList[linkIndex];
             const srcPoPIndex = link[0], dstPoPIndex = link[1];
             const facilityIdTuple = adjustPoPFacility(popMap.get(srcPoPIndex), popMap.get(dstPoPIndex), facilityMap);
             const srcFacilityId = facilityIdTuple[0], dstFacilityId = facilityIdTuple[1];
             if (!popDrawFlag.has(srcPoPIndex)) {
-                drawPoP(srcPoPIndex, srcFacilityId, popMap, facilityMap, cityMap, facilityId2Angle, cityId2Angle, radius, color, directLinkInstances);
+                const colors = getColors(srcPoPIndex);
+                drawPoP(srcPoPIndex, srcFacilityId, popMap, facilityMap, cityMap, facilityId2Angle, cityId2Angle, radius, colors, directLinkInstances);
                 popDrawFlag.set(srcPoPIndex, true);
             }
             if (!popDrawFlag.has(dstPoPIndex)) {
-                drawPoP(dstPoPIndex, dstFacilityId, popMap, facilityMap, cityMap, facilityId2Angle, cityId2Angle, radius, color, directLinkInstances);
+                const colors = getColors(dstPoPIndex);
+                drawPoP(dstPoPIndex, dstFacilityId, popMap, facilityMap, cityMap, facilityId2Angle, cityId2Angle, radius, colors, directLinkInstances);
                 popDrawFlag.set(dstPoPIndex, true);
             }
             const relatedCableIds = linkCableIds[linkIndex];
@@ -1713,262 +2279,57 @@ function queryASTuplePhysical(asn1, asn2) {
                 cableInstances.push(new Cesium.GeometryInstance({
                     geometry: cableGeometry,
                     attributes: {
-                        color: Cesium.ColorGeometryInstanceAttribute.fromColor(color),
+                        color: Cesium.ColorGeometryInstanceAttribute.fromColor(linkColor),
                     },
                 }));
             });
-            subLandCableLineCollection.add(new Cesium.GroundPolylinePrimitive({
+            localLandCableLineCollection.add(new Cesium.GroundPolylinePrimitive({
                 geometryInstances: cableInstances,
                 appearance: new Cesium.PolylineColorAppearance(),
             }));
         });
-        directLinkCollection.add(new Cesium.Primitive({
+        localDirectLinkCollection.add(new Cesium.Primitive({
             geometryInstances: directLinkInstances,
             appearance: new Cesium.PolylineColorAppearance(),
         }));
 
         popCollection.show = true;
-        directLinkCollection.show = true;
-        subFacilityCollection.show = true;
-        subLandCableLineCollection.show = true;
+        localDirectLinkCollection.show = true;
+        localPhysicalNodeCollection.show = true;
+        localLandCableLineCollection.show = true;
 
         setToggleState("facility-checkbox", false);
         setToggleState("submarine-cable-checkbox", false);
         setToggleState("landing-points-checkbox", false);
         setToggleState("long-haul-cable-checkbox", false);
 
-        setSpecificASTuplePhysicalSlidingBarInfo(phyLinkIds, popMap, facilityMap, asn1, asn2);
-        showSpecificASTuplePhysicalSlidingBar();
+        setASTuplePhysicalSlidingBarInfo(phyLinkIds, popMap, facilityMap, asn1, asn2);
+        showASTuplePhysicalSlidingBar();
     });
 }
 
-function drawPoP(popIndex, facilityID, popMap, facilityMap, cityMap, facilityId2Angle, cityId2Angle, radius, color, directLinkInstances) {
-    const alphaOffset = 45;
-    const popItem = popMap.get(popIndex);
-    let  popCoordinate = undefined;
-    let sourceLat = undefined, sourceLon = undefined;
-    if (facilityID !== -1) {
-        const facilityItem = facilityMap.get(facilityID);
-        popCoordinate = getPoPCoordinate({latitude: facilityItem.latitude, longitude: facilityItem.longitude}, facilityId2Angle.get(facilityID), radius);
-        facilityId2Angle.set(facilityID, facilityId2Angle.get(facilityID) + alphaOffset);
-        sourceLat = facilityItem.latitude, sourceLon = facilityItem.longitude;
-    }
-    else {
-        const cityID = popItem.city_id;
-        const cityItem = cityMap.get(cityID);
-        popCoordinate = getPoPCoordinate({latitude: cityItem.latitude, longitude: cityItem.longitude}, cityId2Angle.get(cityID), radius);
-        cityId2Angle.set(cityID, cityId2Angle.get(cityID) + alphaOffset);
-        sourceLat = cityItem.latitude, sourceLon = cityItem.longitude;
-    }
-    const position = Cesium.Cartesian3.fromDegrees(popCoordinate.longitude, popCoordinate.latitude, popHeight);
-    const popID = new PoPID(popItem.index, PRIMTYPE.POP, popItem.asn, popCoordinate.latitude, popCoordinate.longitude, popItem.facility_id, popItem.city_id, popItem.landing_point_id, popItem.distance);
-    popCollection.add({
-        id: popID,
-        show: true,
-        position: position,
-        pixelSize: popPixelSize,
-        color: color,
-        outlineColor: Cesium.Color.BLACK,
-        outlineWidth: popOutlineWidth,
-        scaleByDistance: new Cesium.NearFarScalar(popMinScaleDist, popMaxScaler, popMaxScaleDist, popMinScaler),
-    });
-    const linkGeomotry = new Cesium.PolylineGeometry({
-        width: directLinkWidth,
-        positions: Cesium.Cartesian3.fromDegreesArray([sourceLon, sourceLat, popCoordinate.longitude, popCoordinate.latitude]),
-    });
-    directLinkInstances.push(new Cesium.GeometryInstance({
-        geometry: linkGeomotry,
-        attributes: {
-            color: Cesium.ColorGeometryInstanceAttribute.fromColor(color),
-        },
-    }));
-}
-
-function getPoPCoordinate(BaseCoord, alpha, radius) {
-    const a = 6378137.0;
-    const f = 1 / 298.257223563;
-    const b = a * (1 - f);
-    const alphaRad = (alpha * Math.PI) / 180;
-    const latRad = (BaseCoord.latitude * Math.PI) / 180;
-    const lonRad = (BaseCoord.longitude * Math.PI) / 180;
-    const e2 = 1 - (b * b) / (a * a);
-    const N = a / Math.sqrt(1 - e2 * Math.sin(latRad) * Math.sin(latRad));
-    const newLatRad = latRad + (radius * Math.cos(alphaRad)) / N;
-    const newLonRad = lonRad + (radius * Math.sin(alphaRad)) / (N * Math.cos(latRad));
-    const newLat = (newLatRad * 180) / Math.PI;
-    const newLon = (newLonRad * 180) / Math.PI;
-    return {
-        latitude: newLat,
-        longitude: newLon
-    };
-}
-
-function setSpecificASTuplePhysicalSlidingBarInfo(phyLinkIds, popMap, facilityMap, asn1, asn2) {
-
-    function addPoP(table, popIndex, lIndex) {
-        const latitude1 = popMap.get(popIndex).latitude, longitude1 = popMap.get(popIndex).longitude;
-        const pop1Row = table.insertRow();
-        const pop1Header = document.createElement('th');
-        pop1Header.textContent = `PoP${lIndex}`;
-        pop1Row.appendChild(pop1Header);
-        const pop1Data = document.createElement('td');
-        pop1Data.textContent = `${latitude1},${longitude1}`;
-        pop1Row.appendChild(pop1Data);
-        pop1Data.addEventListener('click', () => {
-            // Call CesiumJS camera flyTo method
-            if (camera) {
-                camera.flyTo({
-                    destination: Cesium.Cartesian3.fromDegrees(longitude1, latitude1, flyHeight) // Adjust height as needed
-                });
-            } else {
-                alert('Cesium viewer is not initialized.');
-            }
-        });
-    }
-
-    function addASN(table, popIndex, lIndex) {
-        const asn = popMap.get(popIndex).asn;
-        const asnRow = table.insertRow();
-        const asnHeader = document.createElement('th');
-        asnHeader.textContent = `ASN${lIndex}`;
-        asnRow.appendChild(asnHeader);
-        const asnData = document.createElement('td');
-        asnData.textContent = asn;
-        asnRow.appendChild(asnData);
-    }
-
-    function addFacility(table, popIndex, lIndex) {
-        const facility1Row = table.insertRow();
-        const facility1Header = document.createElement('th');
-        facility1Header.textContent = `facility${lIndex}`;
-        facility1Row.appendChild(facility1Header);
-        const facility1Data = document.createElement('td');
-        if (popMap.get(popIndex).facility_id !== -1) {
-            const facility = facilityMap.get(popMap.get(popIndex).facility_id);
-            facility1Data.textContent = facility.name;
-        } else {
-            facility1Data.textContent = 'unknown';
-        }
-        facility1Row.appendChild(facility1Data);
-    }
-
-    function addLocation(table, popIndex, lIndex) {
-        const location1Row = table.insertRow();
-        const location1Header = document.createElement('th');
-        location1Header.textContent = `location${lIndex}`;
-        location1Row.appendChild(location1Header);
-        const location1Data = document.createElement('td');
-        if (popMap.get(popIndex).facility_id !== -1) {
-            const facility = facilityMap.get(popMap.get(popIndex).facility_id);
-            location1Data.textContent = `${facility.city}, ${facility.state}, ${facility.country}`;
-        }
-        else {
-            location1Data.textContent = 'unknown';
-        }
-        location1Row.appendChild(location1Data);
-    }
-
-    const slidingbarTitle = document.getElementById('slidingbar4-title');
-    slidingbarTitle.textContent = "AS" + asn1 + " - AS" + asn2 + " 互联信息";
-    const slidingbar4Content = document.getElementById('slidingbar4Content');
-    slidingbar4Content.innerHTML = '';
-    phyLinkIds.forEach((link, index) => {
-        const table = document.createElement('table');
-
-        // Link Index Row (Span 2 columns)
-        const linkIndexRow = table.insertRow();
-        const linkIndexCell = document.createElement('th');
-        linkIndexCell.textContent = `link ${index + 1}`;
-        linkIndexCell.colSpan = 2;
-        linkIndexCell.className = 'link-index';
-        linkIndexRow.appendChild(linkIndexCell);
-        
-        for (let i = 1; i < 3; i++) {
-            addPoP(table, link[i-1], i);
-            addASN(table, link[i-1], i);
-            addFacility(table, link[i-1], i);
-            addLocation(table, link[i-1], i);
-        }
-        slidingbar4Content.appendChild(table);
-    });
-}
-
-function showSpecificASTuplePhysicalSlidingBar() {
-    const slidingbar = document.getElementById('slidingbar4');
-    slidingbar.classList.add('open');
-}
-
-function initSpecificASTuplePhysicalSlidingBar() {
+/**
+ * Set up event listener for close button of AS-tuple-physical-view mode sliding bar
+ * @param
+ * @return {void}
+ */
+function setupASTuplePhysicalSlidingBarCloseEventListener() {
     const closeSlidingbarBtn = document.getElementById('closeSlidingbar4');
     closeSlidingbarBtn.addEventListener('click', () => {
         const slidingbar = document.getElementById('slidingbar4');
         slidingbar.classList.remove('open');
         popCollection.removeAll();
-        subFacilityCollection.removeAll();
-        subLandCableLineCollection.removeAll();
-        directLinkCollection.removeAll();
+        localPhysicalNodeCollection.removeAll();
+        localLandCableLineCollection.removeAll();
+        localDirectLinkCollection.removeAll();
         popCollection.show = false;
-        subFacilityCollection.show = false;
-        subLandCableLineCollection.show = false;
-        directLinkCollection.show = false;
+        localPhysicalNodeCollection.show = false;
+        localLandCableLineCollection.show = false;
+        localDirectLinkCollection.show = false;
+        tmpSubViewType = SUBVIEWTYPE.GLOBAL;
+        tmpQueryType = QUERYTYPE.NONE;
+        tmpQuerySingleAS = undefined;
+        tmpQueryASTuple = undefined;
         initPhysicalTabView();
     });
-}
-
-function queryASTuple(asn1, asn2) {
-    switch(tmpViewType) {
-        case VIEWTYPE.LOGICAL:
-            queryASTupleLogic(asn1, asn2);
-            break;
-        case VIEWTYPE.PHYSICAL:
-            queryASTuplePhysical(asn1, asn2);
-            break;
-        default:
-            break;
-    }
-}
-
-function closeSlidingBar() {
-    const slidingBarIds = ['slidingbar', 'slidingbar2', 'slidingbar3', 'slidingbar4'];
-    const closeButtonIds = ['closeSlidingbar', 'closeSlidingbar2', 'closeSlidingbar3', 'closeSlidingbar4'];
-    closeButtonIds.forEach((id, index) => {
-        const slidingBar = document.getElementById(slidingBarIds[index]);
-        // const closeSlidingbarBtn = document.getElementById(id);
-        if (slidingBar.classList.contains('open')) { slidingBar.classList.remove('open'); }
-    });
-}
-
-function clearLocalView() {
-
-    closeSlidingBar();
-
-    subLogicNodeCollection.removeAll();
-    subLogicNodeCollection.show = false;
-
-    subLogicLinkCollection.removeAll();
-    subLogicLinkCollection.show = false;
-
-    popCollection.removeAll();
-    popCollection.show = false;
-
-    subFacilityCollection.removeAll();
-    subFacilityCollection.show = false;
-    
-    subLandCableLineCollection.show = false;
-    subLandCableLineCollection.removeAll();
-
-    directLinkCollection.show = false;
-    directLinkCollection.removeAll();
-}
-
-function generateCielabColors(n) {
-    const colors = [];
-    for (let i = 0; i < n; i++) {
-        const l = 70; // 亮度
-        const a = Math.cos((i / n) * 2 * Math.PI) * 50; // a 分量
-        const b = Math.sin((i / n) * 2 * Math.PI) * 50; // b 分量
-        const color = chroma.lab(l, a, b).hex(); // 转换为 RGB
-        colors.push(color);
-    }
-    return colors;
 }
