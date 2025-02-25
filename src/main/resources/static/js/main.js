@@ -134,6 +134,10 @@ const localDirectLinkCollection = scene.primitives.add(new Cesium.PrimitiveColle
 const localLandCableLineWidth = 3;
 const localDirectLinkWidth = 3;
 
+// local submarine cable collection
+const localSubmarineCableLineCollection = scene.primitives.add(new Cesium.PrimitiveCollection());
+const localSubmarineCableLineWidth = 3;
+
 // tab view init timeout
 const tabViewInitTimeout = 10000;
 
@@ -843,9 +847,7 @@ function physicalNodeToggleController() {
                 physicalNodeLabelCollection.show = (event.target.checked) ? true : false;
                 break;
             case SUBVIEWTYPE.LOCAL:
-                // Todo: physical local view
-                physicalNodeCollection.show = (event.target.checked) ? true : false;
-                physicalNodeLabelCollection.show = (event.target.checked) ? true : false;
+                localPhysicalNodeCollection.show = (event.target.checked) ? true : false;
                 break;
             default:
                 break;
@@ -866,8 +868,7 @@ function submarineCableToggleController() {
                 submarineCableLineCollection.show = (event.target.checked)?true:false;
                 break;
             case SUBVIEWTYPE.LOCAL:
-                // Todo: submarine cable local view
-                submarineCableLineCollection.show = (event.target.checked)?true:false;
+                localSubmarineCableLineCollection.show = (event.target.checked)?true:false;
                 break;
             default:
                 break;
@@ -889,7 +890,7 @@ function landingPointToggleController() {
                 break;
             case SUBVIEWTYPE.LOCAL:
                 // Todo: landing point local view
-                landingPointCollection.show = (event.target.checked)?true:false;
+                // landingPointCollection.show = (event.target.checked)?true:false;
                 break;
             default:
                 break;
@@ -911,7 +912,7 @@ function landCableToggleController() {
                 break;
             case SUBVIEWTYPE.LOCAL:
                 // Todo: land cable local view
-                landCableLineCollection.show = (event.target.checked)?true:false;
+                localLandCableLineCollection.show = (event.target.checked)?true:false;
                 break;
             default:
                 break;
@@ -978,6 +979,9 @@ function clearLocalView() {
 
     localDirectLinkCollection.show = false;
     localDirectLinkCollection.removeAll();
+
+    localSubmarineCableLineCollection.show = false;
+    localSubmarineCableLineCollection.removeAll();
 }
 
 /**
@@ -1612,6 +1616,7 @@ function querySingleASPhysical(asn) {
     localPhysicalNodeCollection.removeAll();
     localDirectLinkCollection.removeAll();
     localLandCableLineCollection.removeAll();
+    localSubmarineCableLineCollection.removeAll();
 
     const popPos = [];
     const popIds = [];
@@ -1736,10 +1741,16 @@ function querySingleASPhysical(asn) {
         localPhysicalNodeCollection.show = true;
         localDirectLinkCollection.show = true;
 
-        setToggleState("facility-checkbox", false);
-        setToggleState("submarine-cable-checkbox", false);
-        setToggleState("landing-points-checkbox", false);
-        setToggleState("long-haul-cable-checkbox", false);
+        physicalNodeCollection.show = false;
+        physicalNodeLabelCollection.show = false;
+        landingPointCollection.show = false;
+        submarineCableLineCollection.show = false;
+        landCableLineCollection.show = false;
+
+        // setToggleState("facility-checkbox", false);
+        // setToggleState("submarine-cable-checkbox", false);
+        // setToggleState("landing-points-checkbox", false);
+        // setToggleState("long-haul-cable-checkbox", false);
 
         setSingleASPhysicalSlidingBarInfo(asn, popPos, facilityIds, data);
         showSingleASPhysicalSlidingBar();
@@ -2083,18 +2094,22 @@ function queryASTuplePhysical(asn1, asn2) {
     localPhysicalNodeCollection.removeAll();
     localLandCableLineCollection.removeAll();
     localDirectLinkCollection.removeAll();
+    localSubmarineCableLineCollection.removeAll();
 
     const phyLinkIds = [];
     const linkCableIds = new Array();
+    const linkSubmarineIds = new Array();
 
     const popIds = new Set();
     const facilityIds = new Set();
     const cityIds = new Set();
     const cableIds = new Set();
+    const submarineIds = new Set();
     
     const popMap = new Map();
     const facilityMap = new Map();
     const cableMap = new Map();
+    const submarineMap = new Map();
     const cityMap = new Map();
         
     ajaxPromise({
@@ -2117,12 +2132,17 @@ function queryASTuplePhysical(asn1, asn2) {
             phyLinkIds.push([dataItem.src_pop_index, dataItem.dst_pop_index]);
             popIds.add(dataItem.src_pop_index);
             popIds.add(dataItem.dst_pop_index);
-            const cable_ids = dataItem.cable_ids;
+            const cable_ids = dataItem.cable_ids, submarine_ids = dataItem.submarine_ids;
             linkCableIds.push(cable_ids);
+            linkSubmarineIds.push(submarine_ids);
             cable_ids.forEach(cable_id => {
                 cableIds.add(cable_id);
             });
+            submarine_ids.forEach(submarine_id => {
+                submarineIds.add(submarine_id);
+            });
         });
+        console.log(submarineIds);
 
         const params = Array.from(popIds).join(",");
         return ajaxPromise({
@@ -2196,11 +2216,33 @@ function queryASTuplePhysical(asn1, asn2) {
             console.error("Failed to load land cables: " + message);
             return;
         }
-        if (dataLength === 0) { return; }
         
         data.forEach(dataItem => {
             cableMap.set(dataItem.index, dataItem);
         });
+
+        const params = Array.from(submarineIds).join(",");
+        return ajaxPromise({
+            url: baseURL + "/submarine-cables/detail",
+            method: ajaxMethod,
+            data: {idxs: params},
+            timeout: ajaxTimeout,
+            dataType: ajaxDataType
+        });
+
+        
+    }).then(function(response) {
+        if (response === undefined) { return; }
+        const data = response.data, dataLength = data.length, status = response.status, message = response.message;
+        if (status !== "ok") {
+            console.error("Failed to load land cables: " + message);
+            return;
+        }
+
+        data.forEach(dataItem => {
+            submarineMap.set(dataItem.index, dataItem);
+        });
+        console.log(submarineMap);
 
         const params = Array.from(cityIds).join(",");
         return ajaxPromise({
@@ -2287,6 +2329,43 @@ function queryASTuplePhysical(asn1, asn2) {
                 geometryInstances: cableInstances,
                 appearance: new Cesium.PolylineColorAppearance(),
             }));
+
+            const relatedSubmarineIds = linkSubmarineIds[linkIndex];
+            const submarineInstances = [];
+            relatedSubmarineIds.forEach(submarineId => {
+                console.log("submarineId: " + submarineId);
+                const submarineItem = submarineMap.get(submarineId);
+                console.log(submarineItem);
+                const coordinates = submarineItem.coordinates;
+                
+                try {
+                    coordinates.forEach((coordinate, coordIndex) => {
+                        const cableDegrees = coordinate.flat();
+                        const cablePositions = Cesium.Cartesian3.fromDegreesArray(cableDegrees);
+                        const cableGeometry = new Cesium.GroundPolylineGeometry({
+                            positions: cablePositions,
+                            width: localSubmarineCableLineWidth,
+                        });
+                        const cableInstance = new Cesium.GeometryInstance({
+                            id: new SubmarineCableID(submarineItem.id, PRIMTYPE.SUBMARINECABLE, submarineItem.name, submarineItem.feature_id, submarineItem.source, submarineItem.date, coordIndex),
+                            geometry: cableGeometry,
+                            attributes: {
+                                color: Cesium.ColorGeometryInstanceAttribute.fromColor(linkColor),
+                            }
+                        });
+                        submarineInstances.push(cableInstance);
+                    });
+                }
+                catch (error) {
+                    console.error("Failed to parse coordinates: " + error);
+                    return;
+                }
+                localSubmarineCableLineCollection.add(new Cesium.GroundPolylinePrimitive({
+                    geometryInstances: submarineInstances,
+                    appearance: new Cesium.PolylineColorAppearance(),
+                }));
+            });
+
         });
         localDirectLinkCollection.add(new Cesium.Primitive({
             geometryInstances: directLinkInstances,
@@ -2297,11 +2376,18 @@ function queryASTuplePhysical(asn1, asn2) {
         localDirectLinkCollection.show = true;
         localPhysicalNodeCollection.show = true;
         localLandCableLineCollection.show = true;
+        localSubmarineCableLineCollection.show = true;
 
-        setToggleState("facility-checkbox", false);
-        setToggleState("submarine-cable-checkbox", false);
-        setToggleState("landing-points-checkbox", false);
-        setToggleState("long-haul-cable-checkbox", false);
+        physicalNodeCollection.show = false;
+        physicalNodeLabelCollection.show = false;
+        landingPointCollection.show = false;
+        submarineCableLineCollection.show = false;
+        landCableLineCollection.show = false;
+
+        // setToggleState("facility-checkbox", false);
+        // setToggleState("submarine-cable-checkbox", false);
+        // setToggleState("landing-points-checkbox", false);
+        // setToggleState("long-haul-cable-checkbox", false);
 
         setASTuplePhysicalSlidingBarInfo(phyLinkIds, popMap, facilityMap, asn1, asn2);
         showASTuplePhysicalSlidingBar();
@@ -2321,10 +2407,12 @@ function setupASTuplePhysicalSlidingBarCloseEventListener() {
         popCollection.removeAll();
         localPhysicalNodeCollection.removeAll();
         localLandCableLineCollection.removeAll();
+        localSubmarineCableLineCollection.removeAll();
         localDirectLinkCollection.removeAll();
         popCollection.show = false;
         localPhysicalNodeCollection.show = false;
         localLandCableLineCollection.show = false;
+        localSubmarineCableLineCollection.show = false;
         localDirectLinkCollection.show = false;
         tmpSubViewType = SUBVIEWTYPE.GLOBAL;
         tmpQueryType = QUERYTYPE.NONE;
