@@ -461,3 +461,18 @@ hr {
   text-align: center;
   font-weight: bold;
 }
+
+#legend {
+  z-index: 2000; /* 确保图例在Viewer上方 */
+  font-family: Arial, sans-serif;
+  font-size: 28px;
+  color: #333;
+  position: absolute;
+  bottom: 20px; 
+  right: 20px; 
+  background: white; 
+  padding: 10px; 
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  visibility: hidden;
+}

@@ -126,17 +126,17 @@
         </div>
         <div class="switch-container">
           <label class="switch">
-            <input id="p2p-checkbox" type="checkbox">
-            <span class="slider green"></span>
-          </label>
-          <span class="label">P2P链路</span>
-        </div>
-        <div class="switch-container">
-          <label class="switch">
             <input id="p2c-checkbox" type="checkbox">
             <span class="slider blue"></span>
           </label>
           <span class="label">P2C链路</span>
+        </div>
+        <div class="switch-container">
+          <label class="switch">
+            <input id="p2p-checkbox" type="checkbox">
+            <span class="slider green"></span>
+          </label>
+          <span class="label">P2P链路</span>
         </div>
       </div>
 
@@ -147,7 +147,7 @@
             <input id="facility-checkbox" type="checkbox">
             <span class="slider"></span>
           </label>
-          <span class="label">设施</span>
+          <span class="label">机房设施</span>
         </div>
         <div class="switch-container">
           <label class="switch">
@@ -174,7 +174,11 @@
     </div>
   </div>
 
-  
+  <div id="legend">
+    <strong>图例</strong>
+    <div><span style="color: darkgreen;">●</span> <span id="srcAsn">绿色点</span></div>
+    <div><span style="color: darkred;">●</span> <span id="dstAsn">红色点</span></div>
+  </div>
 
   <script type="module" src="/js/main.js"></script>
 </body>

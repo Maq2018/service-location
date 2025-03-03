@@ -14,10 +14,30 @@ const viewer = new Cesium.Viewer('cesiumContainer', {
     navigationHelpButton: false,
     baseLayerPicker: false,
     terrainProvider: new Cesium.EllipsoidTerrainProvider(),
-    baseLayer: Cesium.ImageryLayer.fromProviderAsync(Cesium.ArcGisMapServerImageryProvider.fromUrl(
-        "https://services.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer"
-    )),
+    // baseLayer: Cesium.ImageryLayer.fromProviderAsync(Cesium.ArcGisMapServerImageryProvider.fromUrl(
+    //     "https://services.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer"
+    // )),
 });
+
+function addLayer(type) {
+    const layer = type.slice(0, type.length-2);
+    const tdtURL = `http://t{s}.tianditu.gov.cn/${type}/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=${layer}&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX={TileMatrix}&TILEROW={TileRow}&TILECOL={TileCol}&tk=931b431b7079480e40002c4de3b767b5`;
+    const tdtProvider = new Cesium.WebMapTileServiceImageryProvider({
+        url: tdtURL,
+        layer: layer,
+        style: "default",
+        format: "tiles",
+        tileMatrixSetID: "w",
+        tilingScheme: new Cesium.WebMercatorTilingScheme(),
+        subdomains: ["0", "1", "2", "3", "4", "5", "6", "7"],
+        maximumLevel: 18,
+        rectangle: Cesium.Rectangle.fromDegrees(-180, -85, 180, 85),
+    });
+    viewer.imageryLayers.addImageryProvider(tdtProvider);
+}
+addLayer("vec_w");
+addLayer("cva_w");
+
 const scene = viewer.scene;
 const camera = viewer.camera;
 
@@ -37,6 +57,12 @@ const PRIMTYPE = {
     LOGICNODE: "LogicNode",
     LOGICLINK: "LogicLink",
     POP: "PoP",
+}
+
+const InterConnType = {
+    FACILITY: "FacilityInterConn",
+    LANDCABLE: "LandCableInterConn",
+    SUBMARINECABLE: "SubmarineCableInterConn",
 }
 
 // View Type
@@ -83,7 +109,7 @@ const landCableLineWidth = 3;
 const landCableLineCollection = scene.primitives.add(new Cesium.PrimitiveCollection());
 
 // landing point collection
-const landingPointHeight = 0, landingPointPixelSize = 4;
+const landingPointHeight = 0, landingPointPixelSize = 4, landingPointOutlineWidth = 1;
 const landingPointMinScaleDist = 1e4, landingPointMaxScaleDist = 8e6, landingPointMinScaler = 1, landingPointMaxScaler = 10;
 const landingPointCollection = scene.primitives.add(new Cesium.PointPrimitiveCollection());
 
@@ -119,30 +145,46 @@ const localP2CLogicLinkAlpha = 0.3, localP2PLogicLinkAlpha = 0.15;
 
 // pop collection
 const popCollection = scene.primitives.add(new Cesium.PointPrimitiveCollection());
-const popPixelSize = 4, popOutlineWidth = 0.5;
-const popPixelSizeRange = [2, 3, 4];
-const popHeight = 200, facilityHeight = 150;
-const popMinScaleDist = 1e4, popMaxScaleDist = 8e6, popMinScaler = 1, popMaxScaler = 10;
+const popPixelSize = 8, popOutlineWidth = 0.5;
+const popHeight = 100, facilityHeight = 150;
+const popMinScaleDist = 1e4, popMaxScaleDist = 8e6, popMinScaler = 1, popMaxScaler = 5;
+const INTERSEC_PREC = 1e-3;
 
 // local physical node collection
 const localPhysicalNodeCollection = scene.primitives.add(new Cesium.PointPrimitiveCollection());
-const localPhysicalNodeOutlineWidth = 0.5;
+const localPhyNodePixelSize = 4;
+const localPhyNodeHeight = 200;
+const localPhyNodeOutlineWidth = 0.1;
+const localPhyNodeMinScaleDist = 1e4, localPhyNodeMaxScaleDist = 8e6, localPhyNodeMinScaler = 1, localPhyNodeMaxScaler = 5;
 
 // local land cable collection
 const localLandCableLineCollection = scene.primitives.add(new Cesium.PrimitiveCollection());
 const localDirectLinkCollection = scene.primitives.add(new Cesium.PrimitiveCollection());
-const localLandCableLineWidth = 3;
-const localDirectLinkWidth = 3;
+const localLandCableLineWidth = 2;
+const localDirectLinkWidth = 2;
 
 // local submarine cable collection
 const localSubmarineCableLineCollection = scene.primitives.add(new Cesium.PrimitiveCollection());
-const localSubmarineCableLineWidth = 3;
+const localSubmarineCableLineWidth = 2;
+
+// local landing point collection
+const localLandingPointCollection = scene.primitives.add(new Cesium.PointPrimitiveCollection());
+const localLandingPointPixelSize = 4, localLandingPointOutlineWidth = 0.5, localLandingPointHeight = 200;
+const localLandingPointMinScaleDist = 1e4, localLandingPointMaxScaleDist = 8e6, localLandingPointMinScaler = 1, localLandingPointMaxScaler = 5;
+
+// hover parameter
+const hoverAlpha = 1, unhoverAlpha = 0.1, hoverScaler = 3;
+let hoverPhysicalNode = undefined, hoverSrcPoP = undefined, hoverDstPoP = undefined;
+let hoverLandCableID = undefined;
+let hoverSubmarineCableID = undefined, hoverSrcLandPoint = undefined, hoverDstLandPoint = undefined;
 
 // tab view init timeout
-const tabViewInitTimeout = 10000;
+const tabViewInitTimeout = 5000;
 
 // flyHeight
-const flyHeight = 8e6;
+const flyHeight = 2e7;
+
+const centerLat = 34.28, centerLon = 86.11, centerHeight = 2e7;
 
 class ObjectID {
     constructor(_id, _type) {
@@ -251,6 +293,51 @@ class PoPID extends ObjectID {
     }
 }
 
+class InterConnID {
+    constructor(_id, _type, _src_pop_idx, _dst_pop_idx, _src_asn, _dst_asn) {
+        this.id = _id;
+        this.type = _type;
+        this.srcPopIdx = _src_pop_idx;
+        this.dstPopIdx = _dst_pop_idx;
+        this.srcAsn = _src_asn;
+        this.dstAsn = _dst_asn;
+    }
+}
+
+class FacilityInterConnID extends InterConnID {
+    constructor(_id, _type, _src_pop_idx, _dst_pop_idx, _src_asn, _dst_asn, _name, _org, _city, _state, _country) {
+        super(_id, _type, _src_pop_idx, _dst_pop_idx, _src_asn, _dst_asn);
+        this.name = _name;
+        this.org = _org;
+        this.city = _city;
+        this.state = _state;
+        this.country = _country;
+    }
+}
+
+class LandCableInterConnID extends InterConnID {
+    constructor(_id, _type, _src_pop_idx, _dst_pop_idx, _src_asn, _dst_asn, _from_city, _from_state, _from_country, _to_city, _to_state, _to_country) {
+        super(_id, _type, _src_pop_idx, _dst_pop_idx, _src_asn, _dst_asn);
+        this.fromCity = _from_city;
+        this.fromState = _from_state;
+        this.fromCountry = _from_country;
+        this.toCity = _to_city;
+        this.toState = _to_state;
+        this.toCountry = _to_country;
+    }
+}
+
+class SubmarineCableInterConnID extends InterConnID {
+    constructor(_id, _type, _src_pop_idx, _dst_pop_idx, _src_asn, _dst_asn, _src_ld_pts_idx, _dst_ld_pts_id, _src_lp_name, _dst_lp_name, _seg_name) {
+        super(_id, _type, _src_pop_idx, _dst_pop_idx, _src_asn, _dst_asn);
+        this.srcLdPtsIdx = _src_ld_pts_idx;
+        this.dstLdPtsIdx = _dst_ld_pts_id;
+        this.srcLpName = _src_lp_name;
+        this.dstLpName = _dst_lp_name;
+        this.segName = _seg_name;
+    }
+}
+
 /** 
  * ajax wrapper for promise
  * @param {Object} options
@@ -314,12 +401,49 @@ function generateCielabColors(n) {
     const colors = [];
     for (let i = 0; i < n; i++) {
         const l = 70; // 亮度
-        const a = Math.cos((i / n) * 2 * Math.PI) * 50; // a 分量
-        const b = Math.sin((i / n) * 2 * Math.PI) * 50; // b 分量
-        const color = chroma.lab(l, a, b).hex(); // 转换为 RGB
+        const a = Math.cos((i / n) * 2 * Math.PI) * 50;
+        const b = Math.sin((i / n) * 2 * Math.PI) * 50;
+        const color = chroma.lab(l, a, b).hex();
         colors.push(color);
     }
     return colors;
+}
+
+/**
+ * generate n colors that are distinguishable to the naked eye using HSL color space
+ * @param {number} n 
+ * @returns {Array} colors
+ */
+function generateHSLColors(n) {
+    const colors = [];
+    const saturation = 70;
+    const lightness = 50;
+    for (let i = 0; i < n; i++) {
+        const hue = (i * 360 / n) % 360;
+        const color = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+        colors.push(color);
+    }
+    return colors;
+}
+
+/**
+ * 
+ * @param {number} lat 
+ * @param {number} lon 
+ * @returns 
+ */
+function coordnateOffset(lat, lng) {
+    const KM_PER_DEGREE = 111, DISTANCE_RANGE = 5;
+    const latPerturbationRange = DISTANCE_RANGE / KM_PER_DEGREE; // 约 0.045 度
+    const latPerturbation = (Math.random() * 2 - 1) * latPerturbationRange;
+
+    const lngPerturbationRange = DISTANCE_RANGE / (KM_PER_DEGREE * Math.cos((lat * Math.PI) / 180));
+    const lngPerturbation = (Math.random() * 2 - 1) * lngPerturbationRange;
+    
+    const newLat = lat + latPerturbation;
+    const newLng = lng + lngPerturbation;
+
+    return [newLat, newLng];
 }
 
 /**
@@ -346,6 +470,15 @@ function getPoPCoordinate(BaseCoord, alpha, radius) {
         latitude: newLat,
         longitude: newLon
     };
+}
+
+/**
+ * clear searchBox
+ * @param
+ * @return {void}
+ */
+function clearSearchArea() {
+    document.getElementById('searchBox').value = "";
 }
 
 
@@ -507,14 +640,14 @@ function loadLandingPointCollection() {
         }
         data.forEach(dataItem => {
             const position = Cesium.Cartesian3.fromDegrees(dataItem.longitude, dataItem.latitude, landingPointHeight);
-            const pointID = new LandingPointID(dataItem.index, PRIMTYPE.LANDINGPOINT, dataItem.city, dataItem.state, dataItem.country, dataItem.latitude, dataItem.longitude, dataItem.source, dataItem.date);
+            const pointID = new LandingPointID(dataItem.cable_id, PRIMTYPE.LANDINGPOINT, dataItem.city, dataItem.state, dataItem.country, dataItem.latitude, dataItem.longitude, dataItem.source, dataItem.date);
             landingPointCollection.add({
                 id : pointID,
                 position : position,
                 pixelSize : landingPointPixelSize,
                 color : Cesium.Color.WHITE,
                 outlineColor : Cesium.Color.BLACK,
-                outlineWidth : 1,
+                outlineWidth : landingPointOutlineWidth,
                 scaleByDistance: new Cesium.NearFarScalar(landingPointMinScaleDist, landingPointMaxScaler, landingPointMaxScaleDist, landingPointMinScaler),
             });
         });
@@ -701,6 +834,48 @@ function loadLogicLinks() {
  * @return {void}
 */
 function setupMouseMoveEventListener() {
+
+    function showInfoBox(content, x, y) {
+        infoBox.innerHTML = content;
+        infoBox.style.display = 'block';
+        infoBox.style.left = x + 'px';
+        infoBox.style.top = y + 'px';
+    }
+
+    function hideInfoBox() {
+        infoBox.innerHTML = "";
+        infoBox.style.display = 'none';
+    }
+
+    function recoverUnhoverState() {
+        const hoverPointArray = [hoverPhysicalNode, hoverSrcPoP, hoverDstPoP, hoverSrcLandPoint, hoverDstLandPoint];
+        hoverPointArray.forEach(hoverPoint => {
+            if (hoverPoint !== undefined) {
+                hoverPoint.pixelSize = hoverPoint.pixelSize / hoverScaler;
+                hoverPoint.color = hoverPoint.color.withAlpha(unhoverAlpha);
+            }
+        });
+        hoverPhysicalNode = undefined, hoverSrcPoP = undefined, hoverDstPoP = undefined;
+
+        if (hoverLandCableID !== undefined) {
+            const attributes = localLandCableLineCollection.get(0).getGeometryInstanceAttributes(hoverLandCableID);
+            let values = new Array();
+            values.push(...attributes.color);
+            values[3] = parseInt(unhoverAlpha * 255);
+            attributes.color = values;
+            hoverLandCableID = undefined;
+        }
+
+        if (hoverSubmarineCableID !== undefined) {
+            const attributes = localSubmarineCableLineCollection.get(0).getGeometryInstanceAttributes(hoverSubmarineCableID);
+            let values = new Array();
+            values.push(...attributes.color);
+            values[3] = parseInt(unhoverAlpha * 255);
+            attributes.color = values;
+            hoverSubmarineCableID = undefined;
+        }
+    }
+
     const infoBox = document.createElement('div');
     infoBox.style.position = 'absolute';
     infoBox.style.color = 'white';
@@ -717,42 +892,166 @@ function setupMouseMoveEventListener() {
     // ScreenSpaceEventHandler.MotionEventCallback
     handler.setInputAction(function(movement) {
         const pickedObject = viewer.scene.pick(movement.endPosition); // movement: Cesium.ScreenSpaceEventHandler.MotionEvent
-        if (Cesium.defined(pickedObject) && Cesium.defined(pickedObject.id)) {
-            switch(pickedObject.id.type) {
-                case PRIMTYPE.PHYNODE:
-                    infoBox.innerHTML = "<p>Facility: " + pickedObject.id.name + "<br>Organization: " + pickedObject.id.organization + "<br>City: " + pickedObject.id.city + "<br>State: " + pickedObject.id.state + "<br>Country: " + pickedObject.id.country + "</p>";
-                    break;
-                case PRIMTYPE.CLUSTERNODE:
-                    infoBox.innerHTML = "<p>Facility: " + pickedObject.id.name + "<br>Organization: " + pickedObject.id.organization + "<br>City: " + pickedObject.id.city + "<br>State: " + pickedObject.id.state + "<br>Country: " + pickedObject.id.country + "</p>";
-                    break;
-                case PRIMTYPE.SUBMARINECABLE:
-                    infoBox.innerHTML = "<p>Submarine Cable: " + pickedObject.id.name + "<br>Feature ID: " + pickedObject.id.featureID + "</p>";
-                    break;
-                case PRIMTYPE.LANDCABLE:
-                    infoBox.innerHTML = "<p>From: " + pickedObject.id.fromCity + ", " + pickedObject.id.fromState + ", " + pickedObject.id.fromCountry + "<br>To: " + pickedObject.id.toCity + ", " + pickedObject.id.toState + ", " + pickedObject.id.toCountry + "<br>Distance: " + pickedObject.id.distance + "</p>";
-                    break;
-                case PRIMTYPE.LANDINGPOINT:
-                    infoBox.innerHTML = "<p>City: " + pickedObject.id.city + "<br>State: " + pickedObject.id.state + "<br>Country: " + pickedObject.id.country + "</p>";
-                    break;
-                case PRIMTYPE.LOGICNODE:
-                    infoBox.innerHTML = "<p>ASN:" + pickedObject.id.asn + "<br>Name: " + pickedObject.id.name + "<br>Organization: " + pickedObject.id.organization + "</p>";
-                    break;
-                case PRIMTYPE.LOGICLINK:
-                    infoBox.innerHTML = "<p>SRC: AS" + pickedObject.id.srcAsn + "<br>DST: AS" + pickedObject.id.dstAsn + "<br>Link Type: " + pickedObject.id.linkType + "</p>";
-                    break;
-                case PRIMTYPE.POP:
-                    infoBox.innerHTML = "<p>ASN: " + pickedObject.id.asn + "<br>latitude: " + pickedObject.id.latitude + "<br>longitude: " + pickedObject.id.longitude + "</p>";
-                    break;
-                default:
-                    infoBox.innerHTML = "Unknown";
-                    break;
+        let content = undefined;
+        if (tmpViewType === VIEWTYPE.LOGICAL || tmpSubViewType === SUBVIEWTYPE.GLOBAL || (tmpViewType === VIEWTYPE.PHYSICAL && tmpQueryType === QUERYTYPE.SINGLE)) {
+            if (Cesium.defined(pickedObject) && Cesium.defined(pickedObject.id)) {
+                switch(pickedObject.id.type) {
+                    case PRIMTYPE.PHYNODE:
+                        content = "<p>Facility: " + pickedObject.id.name + "<br>Organization: " + pickedObject.id.organization + "<br>City: " + pickedObject.id.city + "<br>State: " + pickedObject.id.state + "<br>Country: " + pickedObject.id.country + "</p>";
+                        showInfoBox(content, movement.endPosition.x, movement.endPosition.y);
+                        break;
+                    case PRIMTYPE.CLUSTERNODE:
+                        content = "<p>Facility: " + pickedObject.id.name + "<br>Organization: " + pickedObject.id.organization + "<br>City: " + pickedObject.id.city + "<br>State: " + pickedObject.id.state + "<br>Country: " + pickedObject.id.country + "</p>";
+                        showInfoBox(content, movement.endPosition.x, movement.endPosition.y);
+                        break;
+                    case PRIMTYPE.SUBMARINECABLE:
+                        content = "<p>Submarine Cable: " + pickedObject.id.name + "<br>Feature ID: " + pickedObject.id.featureID + "</p>";
+                        showInfoBox(content, movement.endPosition.x, movement.endPosition.y);
+                        break;
+                    case PRIMTYPE.LANDCABLE:
+                        content = "<p>From: " + pickedObject.id.fromCity + ", " + pickedObject.id.fromState + ", " + pickedObject.id.fromCountry + "<br>To: " + pickedObject.id.toCity + ", " + pickedObject.id.toState + ", " + pickedObject.id.toCountry + "<br>Distance: " + pickedObject.id.distance + "</p>";
+                        showInfoBox(content, movement.endPosition.x, movement.endPosition.y);
+                        break;
+                    case PRIMTYPE.LANDINGPOINT:
+                        content = "<p>Landing Point: " + pickedObject.id.id + "<br>City: " + pickedObject.id.city + "<br>State: " + pickedObject.id.state + "<br>Country: " + pickedObject.id.country + "</p>";
+                        showInfoBox(content, movement.endPosition.x, movement.endPosition.y);
+                        break;
+                    case PRIMTYPE.LOGICNODE:
+                        content = "<p>ASN:" + pickedObject.id.asn + "<br>Name: " + pickedObject.id.name + "<br>Organization: " + pickedObject.id.organization + "</p>";
+                        showInfoBox(content, movement.endPosition.x, movement.endPosition.y);
+                        break;
+                    case PRIMTYPE.LOGICLINK:
+                        content = "<p>SRC: AS" + pickedObject.id.srcAsn + "<br>DST: AS" + pickedObject.id.dstAsn + "<br>Link Type: " + pickedObject.id.linkType + "</p>";
+                        showInfoBox(content, movement.endPosition.x, movement.endPosition.y);
+                        break;
+                    case PRIMTYPE.POP:
+                        content = "<p>ASN: " + pickedObject.id.asn + "<br>latitude: " + pickedObject.id.latitude + "<br>longitude: " + pickedObject.id.longitude + "</p>";
+                        showInfoBox(content, movement.endPosition.x, movement.endPosition.y);
+                        break;
+                    default:
+                        break;
+                }
+            } else {
+                hideInfoBox();
             }
-            infoBox.style.display = 'block';
-            infoBox.style.left = movement.endPosition.x + 'px';
-            infoBox.style.top = movement.endPosition.y + 'px';
-        } else {
-            infoBox.innerHTML = "";
-            infoBox.style.display = 'none';
+        }
+        else {
+            if (Cesium.defined(pickedObject) && Cesium.defined(pickedObject.id)) {
+                recoverUnhoverState();
+                switch(pickedObject.id.type) {
+                    case InterConnType.FACILITY:
+                        const currentPhysicalNode = pickedObject.primitive;
+                        if (currentPhysicalNode !== hoverPhysicalNode) {
+                            const hoverPointArray = [hoverPhysicalNode, hoverSrcPoP, hoverDstPoP];
+                            hoverPointArray.forEach(hoverPoint => {
+                                if (hoverPoint !== undefined) {
+                                    hoverPoint.pixelSize = hoverPoint.pixelSize / hoverScaler;
+                                    hoverPoint.color = hoverPoint.color.withAlpha(unhoverAlpha);
+                                }
+                            });
+                            hoverPhysicalNode = currentPhysicalNode;
+                            hoverSrcPoP = popCollection.get(pickedObject.id.srcPopIdx);
+                            hoverDstPoP = popCollection.get(pickedObject.id.dstPopIdx);
+                            const _hoverPointArray = [hoverPhysicalNode, hoverSrcPoP, hoverDstPoP];
+                            _hoverPointArray.forEach(hoverPoint => {
+                                hoverPoint.pixelSize = hoverPoint.pixelSize * hoverScaler;
+                                hoverPoint.color = hoverPoint.color.withAlpha(hoverAlpha);
+                            });
+                            content = "<p>Facility: " + pickedObject.id.name + "<br>Organization: " + pickedObject.id.org + "<br>City: " + pickedObject.id.city + "<br>State: " + pickedObject.id.state + "<br>Country: " + pickedObject.id.country + "</p>";
+                            showInfoBox(content, movement.endPosition.x, movement.endPosition.y);
+                        }
+                        break;
+                    case InterConnType.LANDCABLE:
+                        if (pickedObject.id !== hoverLandCableID) {
+                            const attributes = localLandCableLineCollection.get(0).getGeometryInstanceAttributes(hoverLandCableID);
+                            if (attributes !== undefined) {
+                                let values = new Array();
+                                values.push(...attributes.color);
+                                values[3] = parseInt(unhoverAlpha * 255);
+                                attributes.color = values;
+                                const hoverPointArray = [hoverSrcPoP, hoverDstPoP];
+                                hoverPointArray.forEach(hoverPoint => {
+                                    if (hoverPoint !== undefined) {
+                                        hoverPoint.pixelSize = hoverPoint.pixelSize / hoverScaler;
+                                        hoverPoint.color = hoverPoint.color.withAlpha(unhoverAlpha);
+                                    }
+                                });
+                            }
+                            hoverLandCableID = pickedObject.id;
+                            const _attributes = localLandCableLineCollection.get(0).getGeometryInstanceAttributes(hoverLandCableID);
+                            let values = new Array();
+                            values.push(..._attributes.color);
+                            values[3] = parseInt(hoverAlpha * 255);
+                            _attributes.color = values;
+                            hoverSrcPoP = popCollection.get(pickedObject.id.srcPopIdx);
+                            hoverDstPoP = popCollection.get(pickedObject.id.dstPopIdx);
+                            const _hoverPointArray = [hoverSrcPoP, hoverDstPoP];
+                            _hoverPointArray.forEach(hoverPoint => {
+                                if (hoverPoint !== undefined) {
+                                    hoverPoint.pixelSize = hoverPoint.pixelSize * hoverScaler;
+                                    hoverPoint.color = hoverPoint.color.withAlpha(hoverAlpha);
+                                }
+                            });
+                            content = "<p>From: " + pickedObject.id.fromCity + ", " + pickedObject.id.fromState + ", " + pickedObject.id.fromCountry + "<br>To: " + pickedObject.id.toCity + ", " + pickedObject.id.toState + ", " + pickedObject.id.toCountry + "<br>Type: Landcable" + "</p>";
+                            showInfoBox(content, movement.endPosition.x, movement.endPosition.y);
+                        }
+                        break;
+                    case InterConnType.SUBMARINECABLE:
+                        if (pickedObject.id !== hoverSubmarineCableID) {
+                            const attributes = localSubmarineCableLineCollection.get(0).getGeometryInstanceAttributes(hoverSubmarineCableID);
+                            if (attributes !== undefined) {
+                                let values = new Array();
+                                values.push(...attributes.color);
+                                values[3] = parseInt(unhoverAlpha * 255);
+                                attributes.color = values;
+                            }
+                            const hoverPointArray = [hoverSrcPoP, hoverDstPoP];
+                            hoverPointArray.forEach(hoverPoint => {
+                                if (hoverPoint !== undefined) {
+                                    hoverPoint.pixelSize = hoverPoint.pixelSize / hoverScaler;
+                                    hoverPoint.color = hoverPoint.color.withAlpha(unhoverAlpha);
+                                }
+                            });
+                            const landingPointArray = [hoverSrcLandPoint, hoverDstLandPoint];
+                            landingPointArray.forEach(landingPoint => {
+                                if (landingPoint !== undefined) {
+                                    landingPoint.pixelSize = landingPoint.pixelSize / hoverScaler;
+                                    landingPoint.color = landingPoint.color.withAlpha(unhoverAlpha);
+                                }
+                            });
+                            hoverSubmarineCableID = pickedObject.id;
+                            const _attributes = localSubmarineCableLineCollection.get(0).getGeometryInstanceAttributes(hoverSubmarineCableID);
+                            let values = new Array();
+                            values.push(..._attributes.color);
+                            values[3] = parseInt(hoverAlpha * 255);
+                            _attributes.color = values;
+                            hoverSrcPoP = popCollection.get(pickedObject.id.srcPopIdx);
+                            hoverDstPoP = popCollection.get(pickedObject.id.dstPopIdx);
+                            const _hoverPointArray = [hoverSrcPoP, hoverDstPoP];
+                            _hoverPointArray.forEach(hoverPoint => {
+                                if (hoverPoint !== undefined) {
+                                    hoverPoint.pixelSize = hoverPoint.pixelSize * hoverScaler;
+                                    hoverPoint.color = hoverPoint.color.withAlpha(hoverAlpha);
+                                }
+                            });
+                            const _landingPointArray = [hoverSrcLandPoint, hoverDstLandPoint];
+                            _landingPointArray.forEach(landingPoint => {
+                                if (landingPoint !== undefined) {
+                                    landingPoint.pixelSize = landingPoint.pixelSize * hoverScaler;
+                                    landingPoint.color = landingPoint.color.withAlpha(hoverAlpha);
+                                }
+                            });
+                            content = "<p>Landing Point 1: " + pickedObject.id.srcLpName + "<br>Landing Point 2: " + pickedObject.id.dstLpName + "<br>Cable: " + pickedObject.id.segName + "<br>Type: Submarinecable" + "</p>";
+                            showInfoBox(content, movement.endPosition.x, movement.endPosition.y);
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            } else {
+                recoverUnhoverState();
+                hideInfoBox();
+            }
         }
     }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
 }
@@ -891,6 +1190,7 @@ function landingPointToggleController() {
             case SUBVIEWTYPE.LOCAL:
                 // Todo: landing point local view
                 // landingPointCollection.show = (event.target.checked)?true:false;
+                localLandingPointCollection.show = (event.target.checked)?true:false;
                 break;
             default:
                 break;
@@ -912,6 +1212,7 @@ function landCableToggleController() {
                 break;
             case SUBVIEWTYPE.LOCAL:
                 // Todo: land cable local view
+                localDirectLinkCollection.show = (event.target.checked)?true:false;
                 localLandCableLineCollection.show = (event.target.checked)?true:false;
                 break;
             default:
@@ -948,6 +1249,7 @@ function closeSlidingBar() {
         // const closeSlidingbarBtn = document.getElementById(id);
         if (slidingBar.classList.contains('open')) { slidingBar.classList.remove('open'); }
     });
+    closeLegend();
 }
 
 /**
@@ -979,6 +1281,9 @@ function clearLocalView() {
 
     localDirectLinkCollection.show = false;
     localDirectLinkCollection.removeAll();
+
+    localLandingPointCollection.show = false;
+    localLandingPointCollection.removeAll();
 
     localSubmarineCableLineCollection.show = false;
     localSubmarineCableLineCollection.removeAll();
@@ -1031,12 +1336,15 @@ function logicalTabController() {
     }
 
     setToggleState("as-checkbox", true);
-    setToggleState("p2p-checkbox", true);
-    setToggleState("p2c-checkbox", true);
+    setToggleState("p2p-checkbox", false);
+    setToggleState("p2c-checkbox", false);
     setToggleState("facility-checkbox", false);
     setToggleState("submarine-cable-checkbox", false);
     setToggleState("landing-points-checkbox", false);
     setToggleState("long-haul-cable-checkbox", false);
+    camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(centerLon, centerLat, centerHeight),
+    });
 }
 
 /**
@@ -1075,6 +1383,9 @@ function physicalTabController() {
     setToggleState("submarine-cable-checkbox", true);
     setToggleState("landing-points-checkbox", true);
     setToggleState("long-haul-cable-checkbox", false);
+    camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(centerLon, centerLat, centerHeight),
+    });
 }
 
 /**
@@ -1256,6 +1567,7 @@ function setupSingleASLogicSlidingBarCloseEventListener() {
         tmpQueryType = QUERYTYPE.NONE;
         tmpQuerySingleAS = undefined;
         tmpQueryASTuple = undefined;
+        clearSearchArea();
         initLogicalTabView();
     });
 }
@@ -1475,6 +1787,9 @@ function querySingleASLogic(asn) {
         localNbrLogicNodeCollection.show = true;
         localLogicLinkCollection.show = true;
         localTargetLogicNodeCollection.show = true;
+        setToggleState("as-checkbox", true);
+        setToggleState("p2p-checkbox", true);
+        setToggleState("p2c-checkbox", true);
         setSingleASLogicSlidingBarNbrList(neighborListData);
         showSpecificASLogicSlidingBar();
     });
@@ -1500,6 +1815,7 @@ function setupSingleASPhysicalSlidingBarCloseEventListener() {
         tmpQueryType = QUERYTYPE.NONE;
         tmpQuerySingleAS = undefined;
         tmpQueryASTuple = undefined;
+        clearSearchArea();
         initPhysicalTabView();
     });
 }
@@ -1617,6 +1933,7 @@ function querySingleASPhysical(asn) {
     localDirectLinkCollection.removeAll();
     localLandCableLineCollection.removeAll();
     localSubmarineCableLineCollection.removeAll();
+    localLandingPointCollection.removeAll();
 
     const popPos = [];
     const popIds = [];
@@ -1676,7 +1993,7 @@ function querySingleASPhysical(asn) {
                 pixelSize : phyNodeMinPixelSize,
                 color : Cesium.Color.RED,
                 outlineColor : Cesium.Color.BLACK,
-                outlineWidth : localPhysicalNodeOutlineWidth,
+                outlineWidth : localPhyNodeOutlineWidth,
                 scaleByDistance : new Cesium.NearFarScalar(phyNodeMinScaleDist, phyNodeMaxScaler, phyNodeMaxScaleDist, phyNodeMinScaler),
             });
             facilityMap.set(dataItem.index, dataItem);
@@ -1747,13 +2064,16 @@ function querySingleASPhysical(asn) {
         submarineCableLineCollection.show = false;
         landCableLineCollection.show = false;
 
-        // setToggleState("facility-checkbox", false);
-        // setToggleState("submarine-cable-checkbox", false);
-        // setToggleState("landing-points-checkbox", false);
-        // setToggleState("long-haul-cable-checkbox", false);
+        setToggleState("facility-checkbox", true);
+        setToggleState("submarine-cable-checkbox", false);
+        setToggleState("landing-points-checkbox", false);
+        setToggleState("long-haul-cable-checkbox", true);
 
         setSingleASPhysicalSlidingBarInfo(asn, popPos, facilityIds, data);
         showSingleASPhysicalSlidingBar();
+        camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(popPos[0][1], popPos[0][0], flyHeight)
+        });
     });
 }
 
@@ -1776,6 +2096,7 @@ function setupASTupleLogicSlidingBarCloseEventListener() {
         tmpQueryType = QUERYTYPE.NONE;
         tmpQuerySingleAS = undefined;
         tmpQueryASTuple = undefined;
+        clearSearchArea();
         initLogicalTabView();
     });
 }
@@ -1911,9 +2232,40 @@ function queryASTupleLogic(asn1, asn2) {
         }));
         localNbrLogicNodeCollection.show = true;
         localLogicLinkCollection.show = true;
+        setToggleState("as-checkbox", true);
+        setToggleState("p2p-checkbox", true);
+        setToggleState("p2c-checkbox", true);
         setASTupleLogicSlidingBarBaseInfo(srcNode, dstNode, link_type);
         showASTupleLogicSlidingBar();
+        camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees((srcPos[1] + dstPos[1]) / 2, (srcPos[0] + dstPos[0]) / 2, flyHeight)
+        });
     });
+}
+
+/**
+ * show legend of AS tuple
+ * @param {number} asn1 
+ * @param {number} asn2
+ * @return {void} 
+ */
+function showLegend(asn1, asn2) {
+    const srcAsnElem = document.getElementById('srcAsn');
+    const dstAsnElem = document.getElementById('dstAsn');
+    srcAsnElem.textContent = `AS${asn1}`;
+    dstAsnElem.textContent = `AS${asn2}`;
+    const legend = document.getElementById('legend');
+    legend.style.visibility = 'visible';
+}
+
+/**
+ * close legend of AS tuple
+ * @param
+ * @return {void}
+ */
+function closeLegend() {
+    const legend = document.getElementById('legend');
+    legend.style.visibility = 'hidden';
 }
 
 /**
@@ -1924,74 +2276,7 @@ function queryASTupleLogic(asn1, asn2) {
  */
 function queryASTuplePhysical(asn1, asn2) {
 
-    function adjustPoPFacility(popItem1, popItem2, facilityMap) {
-        const facilityId1 = popItem1.facility_id, facilityId2 = popItem2.facility_id;
-        if (facilityId1 !== -1 && facilityId2 !== -1) {
-            const facilityItem1 = facilityMap.get(facilityId1), facilityItem2 = facilityMap.get(facilityId2);
-            const sourceLat = facilityItem1.latitude, sourceLon = facilityItem1.longitude;
-            const targetLat = facilityItem2.latitude, targetLon = facilityItem2.longitude;
-            const threshold = 5; // km
-            if (areCoordinatesNear(sourceLat, sourceLon, targetLat, targetLon, threshold)) {
-                return [facilityId1, facilityId1];
-            }
-        }
-        return [facilityId1, facilityId2];
-    }
-
-    function drawPoP(popIndex, facilityID, popMap, facilityMap, cityMap, facilityId2Angle, cityId2Angle, radius, colors, directLinkInstances) {
-        const alphaOffset = 45;
-        const popItem = popMap.get(popIndex);
-        let  popCoordinate = undefined;
-        let sourceLat = undefined, sourceLon = undefined;
-        if (facilityID !== -1) {
-            const facilityItem = facilityMap.get(facilityID);
-            popCoordinate = getPoPCoordinate({latitude: facilityItem.latitude, longitude: facilityItem.longitude}, facilityId2Angle.get(facilityID), radius);
-            facilityId2Angle.set(facilityID, facilityId2Angle.get(facilityID) + alphaOffset);
-            sourceLat = facilityItem.latitude, sourceLon = facilityItem.longitude;
-        }
-        else {
-            const cityID = popItem.city_id;
-            const cityItem = cityMap.get(cityID);
-            popCoordinate = getPoPCoordinate({latitude: cityItem.latitude, longitude: cityItem.longitude}, cityId2Angle.get(cityID), radius);
-            cityId2Angle.set(cityID, cityId2Angle.get(cityID) + alphaOffset);
-            sourceLat = cityItem.latitude, sourceLon = cityItem.longitude;
-        }
-        
-        const maxRange = Math.min(colors.length, 3) // only support 3 colors
-        const offsets = [0, -0.05, 0.05];
-        const heightOffset = [20, 10, 0];
-        for (let i = 0; i < maxRange; i++) {
-            const position = Cesium.Cartesian3.fromDegrees(popCoordinate.longitude, popCoordinate.latitude, popHeight + heightOffset[i]);
-            let popID = undefined, outlineColor = Cesium.Color.TRANSPARENT, outlineWidth = 0;
-            if (i === (maxRange - 1)) {
-                popID = new PoPID(popItem.index, PRIMTYPE.POP, popItem.asn, popCoordinate.latitude, popCoordinate.longitude, popItem.facility_id, popItem.city_id, popItem.landing_point_id, popItem.distance);
-                outlineColor = Cesium.Color.BLACK;
-                outlineWidth = popOutlineWidth;
-            }
-            popCollection.add({
-                id: popID,
-                show: true,
-                position: position,
-                pixelSize: popPixelSizeRange[i],
-                color: colors[i],
-                outlineColor: outlineColor,
-                outlineWidth: outlineWidth,
-                scaleByDistance: new Cesium.NearFarScalar(popMinScaleDist, popMaxScaler, popMaxScaleDist, popMinScaler),
-            });
-            const linkGeomotry = new Cesium.PolylineGeometry({
-                width: localDirectLinkWidth,
-                positions: Cesium.Cartesian3.fromDegreesArray([sourceLon + offsets[i], sourceLat, popCoordinate.longitude + offsets[i], popCoordinate.latitude]),
-            });
-            directLinkInstances.push(new Cesium.GeometryInstance({
-                geometry: linkGeomotry,
-                attributes: {
-                    color: Cesium.ColorGeometryInstanceAttribute.fromColor(colors[i]),
-                },
-            }));
-        }
-    }
-
-    function setASTuplePhysicalSlidingBarInfo(phyLinkIds, popMap, facilityMap, asn1, asn2) {
+    function setASTuplePhysicalSlidingBarInfo(phyLinkItems, popMap, facilityMap, cityMap, landCableMap, submarineSegMap, landingPointMap, asn1, asn2) {
 
         function addPoP(table, popIndex, lIndex) {
             const latitude1 = popMap.get(popIndex).latitude, longitude1 = popMap.get(popIndex).longitude;
@@ -2025,42 +2310,38 @@ function queryASTuplePhysical(asn1, asn2) {
             asnRow.appendChild(asnData);
         }
     
-        function addFacility(table, popIndex, lIndex) {
-            const facility1Row = table.insertRow();
-            const facility1Header = document.createElement('th');
-            facility1Header.textContent = `facility${lIndex}`;
-            facility1Row.appendChild(facility1Header);
-            const facility1Data = document.createElement('td');
-            if (popMap.get(popIndex).facility_id !== -1) {
-                const facility = facilityMap.get(popMap.get(popIndex).facility_id);
-                facility1Data.textContent = facility.name;
-            } else {
-                facility1Data.textContent = 'unknown';
-            }
-            facility1Row.appendChild(facility1Data);
-        }
-    
         function addLocation(table, popIndex, lIndex) {
             const location1Row = table.insertRow();
             const location1Header = document.createElement('th');
             location1Header.textContent = `location${lIndex}`;
             location1Row.appendChild(location1Header);
             const location1Data = document.createElement('td');
-            if (popMap.get(popIndex).facility_id !== -1) {
-                const facility = facilityMap.get(popMap.get(popIndex).facility_id);
-                location1Data.textContent = `${facility.city}, ${facility.state}, ${facility.country}`;
+            if (popMap.get(popIndex).city_id !== -1) {
+                const popCity = cityMap.get(popMap.get(popIndex).city_id);
+                location1Data.textContent = `${popCity.city}, ${popCity.state}, ${popCity.country}`;
             }
             else {
                 location1Data.textContent = 'unknown';
             }
             location1Row.appendChild(location1Data);
         }
+
+        function addType(table, link_type) {
+            const typeRow = table.insertRow();
+            const typeHeader = document.createElement('th');
+            typeHeader.textContent = 'Type';
+            typeRow.appendChild(typeHeader);
+            const typeData = document.createElement('td');
+            typeData.textContent = link_type;
+            typeRow.appendChild(typeData);
+        }
+
     
         const slidingbarTitle = document.getElementById('slidingbar4-title');
         slidingbarTitle.textContent = "AS" + asn1 + " - AS" + asn2 + " 互联信息";
         const slidingbar4Content = document.getElementById('slidingbar4Content');
         slidingbar4Content.innerHTML = '';
-        phyLinkIds.forEach((link, index) => {
+        phyLinkItems.forEach((phyLinkItem, index) => {
             const table = document.createElement('table');
     
             // Link Index Row (Span 2 columns)
@@ -2070,13 +2351,14 @@ function queryASTuplePhysical(asn1, asn2) {
             linkIndexCell.colSpan = 2;
             linkIndexCell.className = 'link-index';
             linkIndexRow.appendChild(linkIndexCell);
-            
-            for (let i = 1; i < 3; i++) {
-                addPoP(table, link[i-1], i);
-                addASN(table, link[i-1], i);
-                addFacility(table, link[i-1], i);
-                addLocation(table, link[i-1], i);
-            }
+
+            addPoP(table, phyLinkItem.src_pop_index, 1);
+            addASN(table, phyLinkItem.src_pop_index, 1);
+            addLocation(table, phyLinkItem.src_pop_index, 1);
+            addPoP(table, phyLinkItem.dst_pop_index, 2);
+            addASN(table, phyLinkItem.dst_pop_index, 2);
+            addLocation(table, phyLinkItem.dst_pop_index, 2);
+            addType(table, phyLinkItem.ltype);
             slidingbar4Content.appendChild(table);
         });
     }
@@ -2095,23 +2377,30 @@ function queryASTuplePhysical(asn1, asn2) {
     localLandCableLineCollection.removeAll();
     localDirectLinkCollection.removeAll();
     localSubmarineCableLineCollection.removeAll();
+    localLandingPointCollection.removeAll();
 
-    const phyLinkIds = [];
-    const linkCableIds = new Array();
-    const linkSubmarineIds = new Array();
+    const phyLinkItems = new Array();
 
     const popIds = new Set();
-    const facilityIds = new Set();
-    const cityIds = new Set();
-    const cableIds = new Set();
-    const submarineIds = new Set();
-    
     const popMap = new Map();
+    const popDrawFlag = new Map();
+
+    const facilityIds = new Set();
     const facilityMap = new Map();
-    const cableMap = new Map();
-    const submarineMap = new Map();
+
+    const cityIds = new Set();
     const cityMap = new Map();
-        
+
+    const landCableIds = new Set();
+    const landCableMap = new Map();
+
+    const submarineSegIds = new Set();
+    const submarineSegMap = new Map();
+
+    const landingPointIds = new Set();
+    const landingPointMap = new Map();
+    const landingPointDrawFlag = new Map();
+
     ajaxPromise({
         url: baseURL + "/phy-links/detail",
         method: ajaxMethod,
@@ -2129,20 +2418,30 @@ function queryASTuplePhysical(asn1, asn2) {
             return;
         }
         data.forEach(dataItem => {
-            phyLinkIds.push([dataItem.src_pop_index, dataItem.dst_pop_index]);
+            phyLinkItems.push(dataItem);
+            // related pop index
             popIds.add(dataItem.src_pop_index);
             popIds.add(dataItem.dst_pop_index);
-            const cable_ids = dataItem.cable_ids, submarine_ids = dataItem.submarine_ids;
-            linkCableIds.push(cable_ids);
-            linkSubmarineIds.push(submarine_ids);
-            cable_ids.forEach(cable_id => {
-                cableIds.add(cable_id);
+            // related facility index
+            const phyLinkFacilityID = dataItem.facility_id;
+            if (phyLinkFacilityID !== -1) {facilityIds.add(phyLinkFacilityID);}
+            // related city index
+            const phyLinkSrcCityID = dataItem.src_city_id, phyLinkDstCityId = dataItem.dst_city_id;
+            if (phyLinkSrcCityID !== -1) {cityIds.add(phyLinkSrcCityID);}
+            if (phyLinkDstCityId !== -1) {cityIds.add(phyLinkDstCityId);}
+            // related land cable index
+            const phyLinkLandCableIDs = dataItem.land_cable_id;
+            phyLinkLandCableIDs.forEach(phyLinkLandCableId => {
+                if (phyLinkLandCableId !== -1) {landCableIds.add(phyLinkLandCableId);}
             });
-            submarine_ids.forEach(submarine_id => {
-                submarineIds.add(submarine_id);
-            });
+            // related submarine seg
+            const phyLinkSubmarineSegId = dataItem.submarine_seg_id;
+            if (phyLinkSubmarineSegId !== -1) {submarineSegIds.add(phyLinkSubmarineSegId);}
+            // related landing point
+            const phyLinkSrcLandingPointId = dataItem.src_landing_point_id, phyLinkDstLandingPointId = dataItem.dst_landing_point_id;
+            if (phyLinkSrcLandingPointId !== -1) {landingPointIds.add(phyLinkSrcLandingPointId);}
+            if (phyLinkDstLandingPointId !== -1) {landingPointIds.add(phyLinkDstLandingPointId);}
         });
-        console.log(submarineIds);
 
         const params = Array.from(popIds).join(",");
         return ajaxPromise({
@@ -2164,8 +2463,6 @@ function queryASTuplePhysical(asn1, asn2) {
         }
         data.forEach(dataItem => {
             popMap.set(dataItem.index, dataItem);
-            if (dataItem.facility_id !== -1) { facilityIds.add(dataItem.facility_id); }
-            if (dataItem.city_id !== -1) { cityIds.add(dataItem.city_id); }
         });
         
         const params = Array.from(facilityIds).join(",");
@@ -2183,66 +2480,9 @@ function queryASTuplePhysical(asn1, asn2) {
             console.error("Failed to load physical nodes: " + message);
             return;
         }
-        if (dataLength === 0) {
-            return;
-        }
         data.forEach(dataItem => {
             facilityMap.set(dataItem.index, dataItem);
-            const position = Cesium.Cartesian3.fromDegrees(dataItem.longitude, dataItem.latitude, facilityHeight);
-            const nodeID = new PhysicalNodeID(dataItem.index, PRIMTYPE.PHYNODE, dataItem.name, dataItem.organization, dataItem.latitude, dataItem.longitude, dataItem.city, dataItem.state, dataItem.country, dataItem.source, dataItem.date);
-            localPhysicalNodeCollection.add({
-                id : nodeID,
-                position : position,
-                pixelSize : phyNodeMaxPixelSize,
-                color : Cesium.Color.RED,
-                outlineColor : Cesium.Color.BLACK,
-                outlineWidth : localPhysicalNodeOutlineWidth,
-                scaleByDistance : new Cesium.NearFarScalar(phyNodeMinScaleDist, phyNodeMaxScaler, phyNodeMaxScaleDist, phyNodeMinScaler),
-            });
         });
-
-        return ajaxPromise({
-            url: baseURL + "/land-cables/detail",
-            method: ajaxMethod,
-            data: {idxs: Array.from(cableIds).join(",")},
-            timeout: ajaxTimeout,
-            dataType: ajaxDataType
-        });
-
-    }).then(function(response) {
-        if (response === undefined) { return; }
-        const data = response.data, dataLength = data.length, status = response.status, message = response.message;
-        if (status !== "ok") {
-            console.error("Failed to load land cables: " + message);
-            return;
-        }
-        
-        data.forEach(dataItem => {
-            cableMap.set(dataItem.index, dataItem);
-        });
-
-        const params = Array.from(submarineIds).join(",");
-        return ajaxPromise({
-            url: baseURL + "/submarine-cables/detail",
-            method: ajaxMethod,
-            data: {idxs: params},
-            timeout: ajaxTimeout,
-            dataType: ajaxDataType
-        });
-
-        
-    }).then(function(response) {
-        if (response === undefined) { return; }
-        const data = response.data, dataLength = data.length, status = response.status, message = response.message;
-        if (status !== "ok") {
-            console.error("Failed to load land cables: " + message);
-            return;
-        }
-
-        data.forEach(dataItem => {
-            submarineMap.set(dataItem.index, dataItem);
-        });
-        console.log(submarineMap);
 
         const params = Array.from(cityIds).join(",");
         return ajaxPromise({
@@ -2252,124 +2492,267 @@ function queryASTuplePhysical(asn1, asn2) {
             timeout: ajaxTimeout,
             dataType: ajaxDataType
         });
+
     }).then(function(response) {
-        if (response === undefined) { initPhysicalTabView(); return; }
+        if (response === undefined) { return; }
         const data = response.data, dataLength = data.length, status = response.status, message = response.message;
-        if (status !== "ok" && cityIds.length !== 0) {
-            console.error("Failed to load land cables: " + message);
-            initPhysicalTabView();
+        if (status !== "ok") {
+            console.error("Failed to load city: " + message);
             return;
         }
-        if (dataLength === 0 && cityIds.length !== 0) { initPhysicalTabView(); return; }
         data.forEach(dataItem => {
             cityMap.set(dataItem.index, dataItem);
         });
 
-        const radius = 50000; // m
-        const facilityId2Angle = new Map();
-        const cityId2Angle = new Map();
-
-        facilityIds.forEach(facilityId => {
-            facilityId2Angle.set(facilityId, 0);
-        });
-        cityIds.forEach(cityId => {
-            cityId2Angle.set(cityId, 0);
+        const params = Array.from(landCableIds).join(",");
+        return ajaxPromise({
+            url: baseURL + "/land-cables/detail",
+            method: ajaxMethod,
+            data: {idxs: params},
+            timeout: ajaxTimeout,
+            dataType: ajaxDataType
         });
 
-        const popDrawFlag = new Map();
-        const directLinkInstances = [];
-        const cielabColorList = generateCielabColors(phyLinkIds.length);
-        const colorList = cielabColorList.map(color => Cesium.Color.fromCssColorString(color));
+        
+    }).then(function(response) {
+        if (response === undefined) { return; }
+        const data = response.data, dataLength = data.length, status = response.status, message = response.message;
+        if (status !== "ok") {
+            console.error("Failed to load land cables: " + message);
+            return;
+        }
+        data.forEach(dataItem => {
+            landCableMap.set(dataItem.index, dataItem);
+        });
 
-        function getColors(popIndex) {
-            const colors = [];
-            phyLinkIds.forEach((link, linkIndex) => {
-                const srcPoPIndex = link[0], dstPoPIndex = link[1];
-                if (srcPoPIndex === popIndex || dstPoPIndex === popIndex) {
-                    colors.push(colorList[linkIndex]);
-                }
-            });
-            return colors;
+        const params = Array.from(submarineSegIds).join(",");
+        return ajaxPromise({
+            url: baseURL + "/submarine-segments/detail",
+            method: ajaxMethod,
+            data: {idxs: params},
+            timeout: ajaxTimeout,
+            dataType: ajaxDataType
+        });
+    }).then(function(response) {
+        if (response === undefined) { return; }
+        const data = response.data, dataLength = data.length, status = response.status, message = response.message;
+        if (status !== "ok") {
+            console.error("Failed to load submarine segments: " + message);
+            return;
+        }
+        data.forEach(dataItem => {
+            submarineSegMap.set(dataItem.index, dataItem);
+        });
+
+        const params = Array.from(landingPointIds).join(",");
+        return ajaxPromise({
+            url: baseURL + "/landing-points/detail",
+            method: ajaxMethod,
+            data: {cidxs: params},
+            dataType: ajaxDataType,
+            timeout: ajaxTimeout,
+        });
+    }).then(function(response) {
+        if (response === undefined) { initPhysicalTabView(); return; }
+        const data = response.data, dataLength = data.length, status = response.status, message = response.message;
+        if (status !== "ok") {
+            console.error("Failed to load landing points: " + message);
+            initPhysicalTabView();
+            return;
+        }
+        data.forEach(dataItem => {
+            landingPointMap.set(dataItem.cable_id, dataItem);
+        });
+
+        const popColorMap = new Map();
+        popColorMap.set(asn1, Cesium.Color.DARKRED);
+        popColorMap.set(asn2, Cesium.Color.DARKGREEN);
+        const hslColorList = generateHSLColors(phyLinkItems.length);
+        const linkColorList = hslColorList.map(color => Cesium.Color.fromCssColorString(color).withAlpha(unhoverAlpha));
+        const outlineColor = Cesium.Color.BLACK;
+        const directLinkInstances = new Array();
+        const landCableInstances = new Array();
+        const submarineCableInstances = new Array();
+
+        function drawPoP(popItem) {
+            if (popDrawFlag.get(popItem.index) === undefined) {
+                const position = Cesium.Cartesian3.fromDegrees(popItem.longitude, popItem.latitude, popHeight);
+                const nodeID = new PoPID(popItem.index, PRIMTYPE.POP, popItem.asn, popItem.latitude, popItem.longitude, popItem.facility_id, popItem.city_id, popItem.landing_point_id, popItem.distance);
+                popCollection.add({
+                    id : nodeID,
+                    show : true,
+                    position : position,
+                    pixelSize : popPixelSize,
+                    color : popColorMap.get(popItem.asn),
+                    outlineColor : Cesium.Color.BLACK,
+                    outlineWidth : popOutlineWidth,
+                    scaleByDistance: new Cesium.NearFarScalar(popMinScaleDist, popMaxScaler, popMaxScaleDist, popMinScaler),
+                });
+                popDrawFlag.set(popItem.index, popCollection.length - 1);
+            }
+            return popDrawFlag.get(popItem.index);
         }
 
-        phyLinkIds.forEach((link, linkIndex) => {
-            const linkColor = colorList[linkIndex];
-            const srcPoPIndex = link[0], dstPoPIndex = link[1];
-            const facilityIdTuple = adjustPoPFacility(popMap.get(srcPoPIndex), popMap.get(dstPoPIndex), facilityMap);
-            const srcFacilityId = facilityIdTuple[0], dstFacilityId = facilityIdTuple[1];
-            if (!popDrawFlag.has(srcPoPIndex)) {
-                const colors = getColors(srcPoPIndex);
-                drawPoP(srcPoPIndex, srcFacilityId, popMap, facilityMap, cityMap, facilityId2Angle, cityId2Angle, radius, colors, directLinkInstances);
-                popDrawFlag.set(srcPoPIndex, true);
-            }
-            if (!popDrawFlag.has(dstPoPIndex)) {
-                const colors = getColors(dstPoPIndex);
-                drawPoP(dstPoPIndex, dstFacilityId, popMap, facilityMap, cityMap, facilityId2Angle, cityId2Angle, radius, colors, directLinkInstances);
-                popDrawFlag.set(dstPoPIndex, true);
-            }
-            const relatedCableIds = linkCableIds[linkIndex];
-            const cableInstances = [];
-            relatedCableIds.forEach(cableId => {
-                const cableItem = cableMap.get(cableId);
-                const coordinates = cableItem.coordinates;
-                const cableDegrees = coordinates.flat();
-                const cablePositions = Cesium.Cartesian3.fromDegreesArray(cableDegrees);
-                const cableGeometry = new Cesium.GroundPolylineGeometry({
-                    positions: cablePositions,
-                    width: localLandCableLineWidth,
+        function drawLandingPoint(landingPointItem) {
+            if (landingPointDrawFlag.get(landingPointItem.cable_id) === undefined) {
+                const position = Cesium.Cartesian3.fromDegrees(landingPointItem.longitude, landingPointItem.latitude, localLandingPointHeight);
+                const nodeID = new LandingPointID(landingPointItem.cable_id, PRIMTYPE.LANDINGPOINT, landingPointItem.city, landingPointItem.state, landingPointItem.country, landingPointItem.latitude, landingPointItem.longitude, landingPointItem.source, landingPointItem.date);
+                localLandingPointCollection.add({
+                    id : nodeID,
+                    show : true,
+                    position : position,
+                    pixelSize : localLandingPointPixelSize,
+                    color : Cesium.Color.WHITE,
+                    outlineColor : Cesium.Color.BLACK,
+                    outlineWidth : localLandingPointOutlineWidth,
+                    scaleByDistance: new Cesium.NearFarScalar(localLandingPointMinScaleDist, localLandingPointMaxScaler, localLandingPointMaxScaleDist, localLandingPointMinScaler),
                 });
-                cableInstances.push(new Cesium.GeometryInstance({
-                    geometry: cableGeometry,
-                    attributes: {
-                        color: Cesium.ColorGeometryInstanceAttribute.fromColor(linkColor),
-                    },
-                }));
-            });
-            localLandCableLineCollection.add(new Cesium.GroundPolylinePrimitive({
-                geometryInstances: cableInstances,
-                appearance: new Cesium.PolylineColorAppearance(),
-            }));
+                landingPointDrawFlag.set(landingPointItem.cable_id, localLandingPointCollection.length - 1);
+            }
+            return landingPointDrawFlag.get(landingPointItem.cable_id);
+        }
 
-            const relatedSubmarineIds = linkSubmarineIds[linkIndex];
-            const submarineInstances = [];
-            relatedSubmarineIds.forEach(submarineId => {
-                console.log("submarineId: " + submarineId);
-                const submarineItem = submarineMap.get(submarineId);
-                console.log(submarineItem);
-                const coordinates = submarineItem.coordinates;
-                
-                try {
-                    coordinates.forEach((coordinate, coordIndex) => {
-                        const cableDegrees = coordinate.flat();
-                        const cablePositions = Cesium.Cartesian3.fromDegreesArray(cableDegrees);
-                        const cableGeometry = new Cesium.GroundPolylineGeometry({
-                            positions: cablePositions,
-                            width: localSubmarineCableLineWidth,
-                        });
-                        const cableInstance = new Cesium.GeometryInstance({
-                            id: new SubmarineCableID(submarineItem.id, PRIMTYPE.SUBMARINECABLE, submarineItem.name, submarineItem.feature_id, submarineItem.source, submarineItem.date, coordIndex),
-                            geometry: cableGeometry,
-                            attributes: {
-                                color: Cesium.ColorGeometryInstanceAttribute.fromColor(linkColor),
-                            }
-                        });
-                        submarineInstances.push(cableInstance);
-                    });
-                }
-                catch (error) {
-                    console.error("Failed to parse coordinates: " + error);
-                    return;
-                }
-                localSubmarineCableLineCollection.add(new Cesium.GroundPolylinePrimitive({
-                    geometryInstances: submarineInstances,
-                    appearance: new Cesium.PolylineColorAppearance(),
-                }));
+        function drawLink(src_lat, src_lon, dst_lat, dst_lon, linkColor, linkInstances) {
+            const linkGeometry = new Cesium.GroundPolylineGeometry({
+                positions: Cesium.Cartesian3.fromDegreesArray([src_lon, src_lat, dst_lon, dst_lat]),
+                width: localDirectLinkWidth,
             });
+            const linkInstance = new Cesium.GeometryInstance({
+                geometry: linkGeometry,
+                attributes: {
+                    color: Cesium.ColorGeometryInstanceAttribute.fromColor(linkColor),
+                }
+            });
+            linkInstances.push(linkInstance);
+        }
 
+        phyLinkItems.forEach((phyLinkItem) => {
+            const srcPoPItem = popMap.get(phyLinkItem.src_pop_index), dstPoPItem = popMap.get(phyLinkItem.dst_pop_index);
+            const srcLat = srcPoPItem.latitude, srcLon = srcPoPItem.longitude, dstLat = dstPoPItem.latitude, dstLon = dstPoPItem.longitude;
+            if (((srcLat - dstLat) < INTERSEC_PREC) && ((srcLon - dstLon) < INTERSEC_PREC)) {
+                let popItem = (Math.random() > 0.5) ? srcPoPItem : dstPoPItem;
+                const popPosition = coordnateOffset(popItem.latitude, popItem.longitude);
+                popItem.latitude = popPosition[0];
+                popItem.longitude = popPosition[1];
+            }
         });
-        localDirectLinkCollection.add(new Cesium.Primitive({
+
+        phyLinkItems.forEach((phyLinkItem, phyLinkIndex) => {
+            const linkType = phyLinkItem.ltype;
+            const srcPoPItem = popMap.get(phyLinkItem.src_pop_index), dstPoPItem = popMap.get(phyLinkItem.dst_pop_index);
+            const srcPoPIndex = drawPoP(srcPoPItem), dstPoPIndex = drawPoP(dstPoPItem);
+            
+            const phyLinkColor = linkColorList[phyLinkIndex];
+            switch(linkType) {
+                case 'facility':
+                    const facilityItem = facilityMap.get(phyLinkItem.facility_id);
+                    localPhysicalNodeCollection.add({
+                        id : new FacilityInterConnID(phyLinkIndex, InterConnType.FACILITY, srcPoPIndex, dstPoPIndex, phyLinkItem.src_asn, phyLinkItem.dst_asn, 
+                            facilityItem.name, facilityItem.organization, facilityItem.city, facilityItem.state, facilityItem.country),
+                        show : true,
+                        position : Cesium.Cartesian3.fromDegrees(facilityItem.longitude, facilityItem.latitude, localPhyNodeHeight),
+                        pixelSize : localPhyNodePixelSize,
+                        color : Cesium.Color.WHITE,
+                        outlineColor : outlineColor,
+                        outlineWidth : localPhyNodeOutlineWidth,
+                        scaleByDistance: new Cesium.NearFarScalar(localPhyNodeMinScaleDist, localPhyNodeMaxScaler, localPhyNodeMaxScaleDist, localPhyNodeMinScaler),
+                    });
+                    drawLink(srcPoPItem.latitude, srcPoPItem.longitude, facilityItem.latitude, facilityItem.longitude, phyLinkColor, directLinkInstances);
+                    drawLink(facilityItem.latitude, facilityItem.longitude, dstPoPItem.latitude, dstPoPItem.longitude, phyLinkColor, directLinkInstances);
+                    break;
+                case 'landcable':
+                    let cableGeoCoordinates = new Array();
+                    const srcCityItem = cityMap.get(phyLinkItem.src_city_id), dstCityItem = cityMap.get(phyLinkItem.dst_city_id);
+                    let lastCity = srcCityItem.city, lastState = srcCityItem.state, lastCountry = srcCityItem.country;
+                    phyLinkItem.land_cable_id.forEach(landCableId => {
+                        const landCableItem = landCableMap.get(landCableId);
+                        let cablePositions = JSON.parse(JSON.stringify(landCableItem.coordinates));
+                        if (lastCity !== landCableItem.from_city || lastState !== landCableItem.from_state || lastCountry !== landCableItem.from_country) {
+                            cablePositions.reverse();
+                            lastCity = landCableItem.from_city;
+                            lastState = landCableItem.from_state;
+                            lastCountry = landCableItem.from_country;
+                        }
+                        else {
+                            lastCity = landCableItem.to_city;
+                            lastState = landCableItem.to_state;
+                            lastCountry = landCableItem.to_country;
+                        }
+                        cablePositions = cablePositions.flat();
+                        cableGeoCoordinates.push(...cablePositions);
+                    });
+                    for (let i=2; i<cableGeoCoordinates.length-2; i+=2) {
+                        const positionOffset = coordnateOffset(cableGeoCoordinates[i+1], cableGeoCoordinates[i]);
+                        cableGeoCoordinates[i] = positionOffset[1];
+                        cableGeoCoordinates[i+1] = positionOffset[0];
+                    }
+                    const cablePositions = Cesium.Cartesian3.fromDegreesArray(cableGeoCoordinates);
+                    const cableGeometry = new Cesium.GroundPolylineGeometry({
+                        positions: cablePositions,
+                        width: localLandCableLineWidth,
+                    });
+                    landCableInstances.push(new Cesium.GeometryInstance({
+                        id: new LandCableInterConnID(phyLinkIndex, InterConnType.LANDCABLE, srcPoPIndex, dstPoPIndex, phyLinkItem.src_asn, phyLinkItem.dst_asn, 
+                            srcCityItem.city, srcCityItem.state, srcCityItem.country, dstCityItem.city, dstCityItem.state, dstCityItem.country),
+                        geometry: cableGeometry,
+                        attributes: {
+                            color: Cesium.ColorGeometryInstanceAttribute.fromColor(phyLinkColor),
+                        },
+                    }));
+                    
+                    drawLink(srcPoPItem.latitude, srcPoPItem.longitude, srcCityItem.latitude, srcCityItem.longitude, phyLinkColor, directLinkInstances);
+                    drawLink(dstCityItem.latitude, dstCityItem.longitude, dstPoPItem.latitude, dstPoPItem.longitude, phyLinkColor, directLinkInstances);
+                    break;
+                case 'submarine':
+                    const srcLandingPoint = landingPointMap.get(phyLinkItem.src_landing_point_id), dstLandingPoint = landingPointMap.get(phyLinkItem.dst_landing_point_id);
+                    const src_lp_lat = srcLandingPoint.latitude, src_lp_lon = srcLandingPoint.longitude;
+                    const dst_lp_lat = dstLandingPoint.latitude, dst_lp_lon = dstLandingPoint.longitude;
+                    const srcLpIndex = drawLandingPoint(srcLandingPoint), dstLpIndex = drawLandingPoint(dstLandingPoint);
+                    drawLink(srcPoPItem.latitude, srcPoPItem.longitude, src_lp_lat, src_lp_lon, phyLinkColor, directLinkInstances);
+                    drawLink(dst_lp_lat, dst_lp_lon, dstPoPItem.latitude, dstPoPItem.longitude, phyLinkColor, directLinkInstances);
+
+                    const submarineSegItem = submarineSegMap.get(phyLinkItem.submarine_seg_id);
+                    const coordinates = submarineSegItem.coordinates.flat();
+                    for (let i=2; i<coordinates.length-2; i+=2) {
+                        const positionOffset = coordnateOffset(coordinates[i+1], coordinates[i]);
+                        coordinates[i] = positionOffset[1];
+                        coordinates[i+1] = positionOffset[0];
+                    }
+                    const segPositions = Cesium.Cartesian3.fromDegreesArray(coordinates);
+                    const segGeometry = new Cesium.GroundPolylineGeometry({
+                        positions: segPositions,
+                        width: localSubmarineCableLineWidth,
+                    });
+                    const segInstance = new Cesium.GeometryInstance({
+                        id: new SubmarineCableInterConnID(phyLinkIndex, InterConnType.SUBMARINECABLE, srcPoPIndex, dstPoPIndex, phyLinkItem.src_asn, phyLinkItem.dst_asn, srcLpIndex, dstLpIndex, 
+                            srcLandingPoint.cable_id, dstLandingPoint.cable_id, ""),
+                        geometry: segGeometry,
+                        attributes: {
+                            color: Cesium.ColorGeometryInstanceAttribute.fromColor(phyLinkColor),
+                        },
+                    });
+                    submarineCableInstances.push(segInstance);
+                    break;
+            }
+        });
+
+        localDirectLinkCollection.add(new Cesium.GroundPolylinePrimitive({
             geometryInstances: directLinkInstances,
-            appearance: new Cesium.PolylineColorAppearance(),
+            appearance: new Cesium.PolylineColorAppearance({
+                translucent: true,
+            }),
+        }));
+        localLandCableLineCollection.add(new Cesium.GroundPolylinePrimitive({
+            geometryInstances: landCableInstances,
+            appearance: new Cesium.PolylineColorAppearance({
+                translucent: true,
+            }),
+        }));
+        localSubmarineCableLineCollection.add(new Cesium.GroundPolylinePrimitive({
+            geometryInstances: submarineCableInstances,
+            appearance: new Cesium.PolylineColorAppearance({
+                translucent: true,
+            }),
         }));
 
         popCollection.show = true;
@@ -2377,6 +2760,7 @@ function queryASTuplePhysical(asn1, asn2) {
         localPhysicalNodeCollection.show = true;
         localLandCableLineCollection.show = true;
         localSubmarineCableLineCollection.show = true;
+        localLandingPointCollection.show = true;
 
         physicalNodeCollection.show = false;
         physicalNodeLabelCollection.show = false;
@@ -2384,13 +2768,19 @@ function queryASTuplePhysical(asn1, asn2) {
         submarineCableLineCollection.show = false;
         landCableLineCollection.show = false;
 
-        // setToggleState("facility-checkbox", false);
-        // setToggleState("submarine-cable-checkbox", false);
-        // setToggleState("landing-points-checkbox", false);
-        // setToggleState("long-haul-cable-checkbox", false);
+        setToggleState("facility-checkbox", true);
+        setToggleState("submarine-cable-checkbox", true);
+        setToggleState("landing-points-checkbox", true);
+        setToggleState("long-haul-cable-checkbox", true);
 
-        setASTuplePhysicalSlidingBarInfo(phyLinkIds, popMap, facilityMap, asn1, asn2);
+        setASTuplePhysicalSlidingBarInfo(phyLinkItems, popMap, facilityMap, cityMap, landCableMap, submarineSegMap, landingPointMap, asn1, asn2);
         showASTuplePhysicalSlidingBar();
+        showLegend(asn1, asn2);
+
+        const popItem = popMap.get(phyLinkItems[0].src_pop_index);
+        camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(popItem.longitude, popItem.latitude, flyHeight)
+        });
     });
 }
 
@@ -2409,15 +2799,19 @@ function setupASTuplePhysicalSlidingBarCloseEventListener() {
         localLandCableLineCollection.removeAll();
         localSubmarineCableLineCollection.removeAll();
         localDirectLinkCollection.removeAll();
+        localLandingPointCollection.removeAll();
         popCollection.show = false;
         localPhysicalNodeCollection.show = false;
         localLandCableLineCollection.show = false;
         localSubmarineCableLineCollection.show = false;
+        localLandingPointCollection.show = false;
         localDirectLinkCollection.show = false;
         tmpSubViewType = SUBVIEWTYPE.GLOBAL;
         tmpQueryType = QUERYTYPE.NONE;
         tmpQuerySingleAS = undefined;
         tmpQueryASTuple = undefined;
+        closeLegend();
+        clearSearchArea();
         initPhysicalTabView();
     });
 }
