@@ -153,7 +153,7 @@ const INTERSEC_PREC = 1e-3;
 // local physical node collection
 const localPhysicalNodeCollection = scene.primitives.add(new Cesium.PointPrimitiveCollection());
 const localPhyNodePixelSize = 4;
-const localPhyNodeHeight = 200;
+const localPhyNodeHeight = 1000;
 const localPhyNodeOutlineWidth = 0.1;
 const localPhyNodeMinScaleDist = 1e4, localPhyNodeMaxScaleDist = 8e6, localPhyNodeMinScaler = 1, localPhyNodeMaxScaler = 5;
 
@@ -173,7 +173,8 @@ const localLandingPointPixelSize = 4, localLandingPointOutlineWidth = 0.5, local
 const localLandingPointMinScaleDist = 1e4, localLandingPointMaxScaleDist = 8e6, localLandingPointMinScaler = 1, localLandingPointMaxScaler = 5;
 
 // hover parameter
-const hoverAlpha = 1, unhoverAlpha = 0.1, hoverScaler = 3;
+const hoverAlpha = 1, hoverScaler = 3;
+const landcableUnhoverAlpha = 0.1, submarinecableUnhoverAlpha = 0.3;
 let hoverPhysicalNode = undefined, hoverSrcPoP = undefined, hoverDstPoP = undefined;
 let hoverLandCableID = undefined;
 let hoverSubmarineCableID = undefined, hoverSrcLandPoint = undefined, hoverDstLandPoint = undefined;
@@ -852,7 +853,7 @@ function setupMouseMoveEventListener() {
         hoverPointArray.forEach(hoverPoint => {
             if (hoverPoint !== undefined) {
                 hoverPoint.pixelSize = hoverPoint.pixelSize / hoverScaler;
-                hoverPoint.color = hoverPoint.color.withAlpha(unhoverAlpha);
+                // hoverPoint.color = hoverPoint.color.withAlpha(pointUnhoverAlpha);
             }
         });
         hoverPhysicalNode = undefined, hoverSrcPoP = undefined, hoverDstPoP = undefined;
@@ -861,7 +862,7 @@ function setupMouseMoveEventListener() {
             const attributes = localLandCableLineCollection.get(0).getGeometryInstanceAttributes(hoverLandCableID);
             let values = new Array();
             values.push(...attributes.color);
-            values[3] = parseInt(unhoverAlpha * 255);
+            values[3] = parseInt(landcableUnhoverAlpha * 255);
             attributes.color = values;
             hoverLandCableID = undefined;
         }
@@ -870,7 +871,7 @@ function setupMouseMoveEventListener() {
             const attributes = localSubmarineCableLineCollection.get(0).getGeometryInstanceAttributes(hoverSubmarineCableID);
             let values = new Array();
             values.push(...attributes.color);
-            values[3] = parseInt(unhoverAlpha * 255);
+            values[3] = parseInt(submarinecableUnhoverAlpha * 255);
             attributes.color = values;
             hoverSubmarineCableID = undefined;
         }
@@ -946,7 +947,7 @@ function setupMouseMoveEventListener() {
                             hoverPointArray.forEach(hoverPoint => {
                                 if (hoverPoint !== undefined) {
                                     hoverPoint.pixelSize = hoverPoint.pixelSize / hoverScaler;
-                                    hoverPoint.color = hoverPoint.color.withAlpha(unhoverAlpha);
+                                    // hoverPoint.color = hoverPoint.color.withAlpha(pointUnhoverAlpha);
                                 }
                             });
                             hoverPhysicalNode = currentPhysicalNode;
@@ -955,7 +956,7 @@ function setupMouseMoveEventListener() {
                             const _hoverPointArray = [hoverPhysicalNode, hoverSrcPoP, hoverDstPoP];
                             _hoverPointArray.forEach(hoverPoint => {
                                 hoverPoint.pixelSize = hoverPoint.pixelSize * hoverScaler;
-                                hoverPoint.color = hoverPoint.color.withAlpha(hoverAlpha);
+                                // hoverPoint.color = hoverPoint.color.withAlpha(hoverAlpha);
                             });
                             content = "<p>Facility: " + pickedObject.id.name + "<br>Organization: " + pickedObject.id.org + "<br>City: " + pickedObject.id.city + "<br>State: " + pickedObject.id.state + "<br>Country: " + pickedObject.id.country + "</p>";
                             showInfoBox(content, movement.endPosition.x, movement.endPosition.y);
@@ -967,13 +968,13 @@ function setupMouseMoveEventListener() {
                             if (attributes !== undefined) {
                                 let values = new Array();
                                 values.push(...attributes.color);
-                                values[3] = parseInt(unhoverAlpha * 255);
+                                values[3] = parseInt(landcableUnhoverAlpha * 255);
                                 attributes.color = values;
                                 const hoverPointArray = [hoverSrcPoP, hoverDstPoP];
                                 hoverPointArray.forEach(hoverPoint => {
                                     if (hoverPoint !== undefined) {
                                         hoverPoint.pixelSize = hoverPoint.pixelSize / hoverScaler;
-                                        hoverPoint.color = hoverPoint.color.withAlpha(unhoverAlpha);
+                                        // hoverPoint.color = hoverPoint.color.withAlpha(pointUnhoverAlpha);
                                     }
                                 });
                             }
@@ -989,7 +990,7 @@ function setupMouseMoveEventListener() {
                             _hoverPointArray.forEach(hoverPoint => {
                                 if (hoverPoint !== undefined) {
                                     hoverPoint.pixelSize = hoverPoint.pixelSize * hoverScaler;
-                                    hoverPoint.color = hoverPoint.color.withAlpha(hoverAlpha);
+                                    // hoverPoint.color = hoverPoint.color.withAlpha(hoverAlpha);
                                 }
                             });
                             content = "<p>From: " + pickedObject.id.fromCity + ", " + pickedObject.id.fromState + ", " + pickedObject.id.fromCountry + "<br>To: " + pickedObject.id.toCity + ", " + pickedObject.id.toState + ", " + pickedObject.id.toCountry + "<br>Type: Landcable" + "</p>";
@@ -1002,21 +1003,21 @@ function setupMouseMoveEventListener() {
                             if (attributes !== undefined) {
                                 let values = new Array();
                                 values.push(...attributes.color);
-                                values[3] = parseInt(unhoverAlpha * 255);
+                                values[3] = parseInt(submarinecableUnhoverAlpha * 255);
                                 attributes.color = values;
                             }
                             const hoverPointArray = [hoverSrcPoP, hoverDstPoP];
                             hoverPointArray.forEach(hoverPoint => {
                                 if (hoverPoint !== undefined) {
                                     hoverPoint.pixelSize = hoverPoint.pixelSize / hoverScaler;
-                                    hoverPoint.color = hoverPoint.color.withAlpha(unhoverAlpha);
+                                    // hoverPoint.color = hoverPoint.color.withAlpha(pointUnhoverAlpha);
                                 }
                             });
                             const landingPointArray = [hoverSrcLandPoint, hoverDstLandPoint];
                             landingPointArray.forEach(landingPoint => {
                                 if (landingPoint !== undefined) {
                                     landingPoint.pixelSize = landingPoint.pixelSize / hoverScaler;
-                                    landingPoint.color = landingPoint.color.withAlpha(unhoverAlpha);
+                                    // landingPoint.color = landingPoint.color.withAlpha(pointUnhoverAlpha);
                                 }
                             });
                             hoverSubmarineCableID = pickedObject.id;
@@ -1031,14 +1032,14 @@ function setupMouseMoveEventListener() {
                             _hoverPointArray.forEach(hoverPoint => {
                                 if (hoverPoint !== undefined) {
                                     hoverPoint.pixelSize = hoverPoint.pixelSize * hoverScaler;
-                                    hoverPoint.color = hoverPoint.color.withAlpha(hoverAlpha);
+                                    // hoverPoint.color = hoverPoint.color.withAlpha(hoverAlpha);
                                 }
                             });
                             const _landingPointArray = [hoverSrcLandPoint, hoverDstLandPoint];
                             _landingPointArray.forEach(landingPoint => {
                                 if (landingPoint !== undefined) {
                                     landingPoint.pixelSize = landingPoint.pixelSize * hoverScaler;
-                                    landingPoint.color = landingPoint.color.withAlpha(hoverAlpha);
+                                    // landingPoint.color = landingPoint.color.withAlpha(hoverAlpha);
                                 }
                             });
                             content = "<p>Landing Point 1: " + pickedObject.id.srcLpName + "<br>Landing Point 2: " + pickedObject.id.dstLpName + "<br>Cable: " + pickedObject.id.segName + "<br>Type: Submarinecable" + "</p>";
@@ -2568,7 +2569,7 @@ function queryASTuplePhysical(asn1, asn2) {
         popColorMap.set(asn1, Cesium.Color.DARKRED);
         popColorMap.set(asn2, Cesium.Color.DARKGREEN);
         const hslColorList = generateHSLColors(phyLinkItems.length);
-        const linkColorList = hslColorList.map(color => Cesium.Color.fromCssColorString(color).withAlpha(unhoverAlpha));
+        const linkColorList = hslColorList.map(color => Cesium.Color.fromCssColorString(color));
         const outlineColor = Cesium.Color.BLACK;
         const directLinkInstances = new Array();
         const landCableInstances = new Array();
@@ -2620,7 +2621,7 @@ function queryASTuplePhysical(asn1, asn2) {
             const linkInstance = new Cesium.GeometryInstance({
                 geometry: linkGeometry,
                 attributes: {
-                    color: Cesium.ColorGeometryInstanceAttribute.fromColor(linkColor),
+                    color: Cesium.ColorGeometryInstanceAttribute.fromColor(linkColor.withAlpha(landcableUnhoverAlpha)),
                 }
             });
             linkInstances.push(linkInstance);
@@ -2696,7 +2697,7 @@ function queryASTuplePhysical(asn1, asn2) {
                             srcCityItem.city, srcCityItem.state, srcCityItem.country, dstCityItem.city, dstCityItem.state, dstCityItem.country),
                         geometry: cableGeometry,
                         attributes: {
-                            color: Cesium.ColorGeometryInstanceAttribute.fromColor(phyLinkColor),
+                            color: Cesium.ColorGeometryInstanceAttribute.fromColor(phyLinkColor.withAlpha(landcableUnhoverAlpha)),
                         },
                     }));
                     
@@ -2728,7 +2729,7 @@ function queryASTuplePhysical(asn1, asn2) {
                             srcLandingPoint.cable_id, dstLandingPoint.cable_id, ""),
                         geometry: segGeometry,
                         attributes: {
-                            color: Cesium.ColorGeometryInstanceAttribute.fromColor(phyLinkColor),
+                            color: Cesium.ColorGeometryInstanceAttribute.fromColor(phyLinkColor.withAlpha(submarinecableUnhoverAlpha)),
                         },
                     });
                     submarineCableInstances.push(segInstance);
