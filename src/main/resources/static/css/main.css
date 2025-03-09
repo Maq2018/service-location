@@ -120,15 +120,31 @@ input:checked + .slider {
 }
 
 input:checked + .slider.blue {
-  background-color: #007bff; /* 蓝色 */
+  background-color: #1F78B4; /* 蓝色 */
 }
 
 input:checked + .slider.green {
-  background-color: #28a745; /* 绿色 */
+  background-color: #8C564B; /* 绿色 */
 }
 
 input:checked + .slider.black {
   background-color: #000000; /* 黑色 */
+}
+
+input:checked + .slider.cyan {
+  background-color: #00FFFF;
+}
+
+input:checked + .slider.cornsilk {
+  background-color: #FFF8DC; 
+}
+
+input:checked + .slider.midnightblue {
+  background-color: #191970;
+}
+
+input:checked + .slider.darkorange {
+  background-color: #FF8C00;
 }
 
 input:checked + .slider:before {
@@ -244,7 +260,7 @@ body {
   top: 60px;
   right: -400px; /* 初始隐藏 */
   width: 400px;
-  height: 800px;
+  height: 60%;
   background-color: #fff;
   box-shadow: -2px 0 5px rgba(0, 0, 0, 0.2);
   transition: right 0.3s ease;
@@ -299,7 +315,7 @@ body {
 }
 
 .slidingbar2 {
-  height: 800px;
+  height: 60%;
   width: 300px;
   position: absolute;
   top: 60px;
@@ -353,7 +369,7 @@ hr {
 }
 
 .slidingbar3 {
-  height: 800px;
+  height: 60%;
   width: 300px;
   position: fixed;
   top: 60px;
@@ -404,7 +420,7 @@ hr {
 }
 
 .slidingbar4 {
-  height: 800px;
+  height: 60%;
   width: 300px;
   position: fixed;
   top: 60px;

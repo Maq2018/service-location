@@ -14,10 +14,16 @@ const viewer = new Cesium.Viewer('cesiumContainer', {
     navigationHelpButton: false,
     baseLayerPicker: false,
     terrainProvider: new Cesium.EllipsoidTerrainProvider(),
-    // baseLayer: Cesium.ImageryLayer.fromProviderAsync(Cesium.ArcGisMapServerImageryProvider.fromUrl(
-    //     "https://services.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer"
-    // )),
+    baseLayer: Cesium.ImageryLayer.fromProviderAsync(Cesium.ArcGisMapServerImageryProvider.fromUrl(
+        "https://services.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer"
+    )),
+    contextOptions: {
+        webgl: {
+          antialias: true
+        }
+    },
 });
+viewer.resolutionScale = 2.0;
 
 function addLayer(type) {
     const layer = type.slice(0, type.length-2);
@@ -91,7 +97,9 @@ var tmpQueryASTuple = undefined;
 
 // point collection
 const physicalNodeHeight = 0;
-const phyNodeMinPixelSize = 8, phyNodeMaxPixelSize = 8;
+const phyNodeMinPixelSize = 4, phyNodeMaxPixelSize = 4;
+const phyNodeColor = Cesium.Color.CYAN;
+const physicalNodeOutlineColor = Cesium.Color.BLACK, phyNodeOutlineWidth = 0.1;
 const phyNodeMinScaleDist = 1e4, phyNodeMaxScaleDist = 8e6, phyNodeMinScaler = 1, phyNodeMaxScaler = 10;
 const physicalNodeCollection = scene.primitives.add(new Cesium.PointPrimitiveCollection());
 const physicalNodeLabelCollection = scene.primitives.add(new Cesium.LabelCollection());
@@ -101,40 +109,47 @@ const phyNodeLabelVisMinDistance = 0, phyNodeLabelVisMaxDistance = 100000;
 const clusterDistance = 100;
 
 // sabmarine cable collection
-const submarineCableLineWidth = 3;
+const submarineCableLineWidth = 2;
+const submarineCableColor = Cesium.Color.MIDNIGHTBLUE;
 const submarineCableLineCollection = scene.primitives.add(new Cesium.PrimitiveCollection());
 
 // land cable collection
-const landCableLineWidth = 3;
+const landCableLineWidth = 2;
+const landCableColor = Cesium.Color.DARKORANGE;
 const landCableLineCollection = scene.primitives.add(new Cesium.PrimitiveCollection());
 
 // landing point collection
-const landingPointHeight = 0, landingPointPixelSize = 4, landingPointOutlineWidth = 1;
+const landingPointHeight = 0, landingPointPixelSize = 4;
+const landingPointColor = Cesium.Color.CORNSILK;
+const landingPointOutlineColor = Cesium.Color.BLACK, landingPointOutlineWidth = 0.1;
 const landingPointMinScaleDist = 1e4, landingPointMaxScaleDist = 8e6, landingPointMinScaler = 1, landingPointMaxScaler = 10;
 const landingPointCollection = scene.primitives.add(new Cesium.PointPrimitiveCollection());
 
 // logic node collection
-const logicNodeHeight = 100;
+const logicNodeHeight = 1e4;
 const logicNodeCollection = scene.primitives.add(new Cesium.PointPrimitiveCollection());
 const minLogicNodePixelSize = 4, maxLogicNodePixelSize = 12;
-const logicNodeOutlineWidth = 0.3;
+const logicNodeOutlineWidth = 0, logicNodeOutlineColor = Cesium.Color.TRANSPARENT;
 const tier1AS = [3356, 1299, 2914, 6762, 3257, 6453, 6461, 3491, 5511, 12956, 3320, 701, 7018, 6830];
 const logicNodeMinScaleDist = 1e4, logicNodeMaxScaleDist = 8e6, logicNodeMinScaler = 1, logicNodeMaxScaler = 10;
 var minGlobalConeSize = undefined, maxGlobalConeSize = undefined;
+const tier1ASColor = Cesium.Color.fromCssColorString('#FDB863'), normalASColor = Cesium.Color.fromCssColorString('#B2DF8A'), targetASColor = Cesium.Color.fromCssColorString('#CAB2D6');
 
 // logic link collection
 const logicLinkCollection = scene.primitives.add(new Cesium.PrimitiveCollection());
 const p2cLinkIndex = 0, p2pLinkIndex = 1;
 const logicLinkHeight = 0;
-const minLogicLinkLineWidth = 1, maxLogicLinkLineWidth = 2, p2cLogicLinkAlpha = 0.1, p2pLogicLinkAlpha = 0.05;
+const p2cLogicLinkColor = Cesium.Color.fromCssColorString('#1F78B4'), p2pLogicLinkColor = Cesium.Color.fromCssColorString('#8C564B');
+const minLogicLinkLineWidth = 1, maxLogicLinkLineWidth = 2, p2cLogicLinkAlpha = 0.3, p2pLogicLinkAlpha = 0.15;
 
 // local logic node collection
-const localLogicNodeHeight = 0;
+const localLogicNodeHeight = 1e4;
 const localTargetLogicNodeCollection = scene.primitives.add(new Cesium.PointPrimitiveCollection());
 const localNbrLogicNodeCollection = scene.primitives.add(new Cesium.PointPrimitiveCollection());
 const minLocalLogicNodePixelSize = 4, maxLocalLogicNodePixelSize = 12;
-const localLogicNodeOutlineWidth = 0.3;
+const localLogicNodeOutlineWidth = 0, localLogicNodeOutlineColor = Cesium.Color.TRANSPARENT;
 const localLogicNodeMinScaleDist = 1e4, localLogicNodeMaxScaleDist = 8e6, localLogicNodeMinScaler = 1, localLogicNodeMaxScaler = 10;
+const localLogicNodeAlpha = 1;
 
 // sub logic link collection
 const localLogicLinkCollection = scene.primitives.add(new Cesium.PrimitiveCollection());
@@ -145,10 +160,11 @@ const localP2CLogicLinkAlpha = 0.3, localP2PLogicLinkAlpha = 0.15;
 
 // pop collection
 const popCollection = scene.primitives.add(new Cesium.PointPrimitiveCollection());
-const popPixelSize = 8, popOutlineWidth = 0.5;
-const popHeight = 100, facilityHeight = 150;
+const popPixelSize = 8, popOutlineWidth = 0.1;
+const popHeight = 100, facilityHeight = 1000;
 const popMinScaleDist = 1e4, popMaxScaleDist = 8e6, popMinScaler = 1, popMaxScaler = 5;
 const INTERSEC_PREC = 1e-3;
+const popColors = [Cesium.Color.fromCssColorString('#FFA500'), Cesium.Color.fromCssColorString('#800080')]
 
 // local physical node collection
 const localPhysicalNodeCollection = scene.primitives.add(new Cesium.PointPrimitiveCollection());
@@ -169,11 +185,11 @@ const localSubmarineCableLineWidth = 2;
 
 // local landing point collection
 const localLandingPointCollection = scene.primitives.add(new Cesium.PointPrimitiveCollection());
-const localLandingPointPixelSize = 4, localLandingPointOutlineWidth = 0.5, localLandingPointHeight = 200;
+const localLandingPointPixelSize = 4, localLandingPointOutlineWidth = 0.5, localLandingPointHeight = 1000;
 const localLandingPointMinScaleDist = 1e4, localLandingPointMaxScaleDist = 8e6, localLandingPointMinScaler = 1, localLandingPointMaxScaler = 5;
 
 // hover parameter
-const hoverAlpha = 1, hoverScaler = 3;
+const hoverAlpha = 1, unhoverAlpha = 0.5, hoverScaler = 3;
 const landcableUnhoverAlpha = 0.1, submarinecableUnhoverAlpha = 0.3;
 let hoverPhysicalNode = undefined, hoverSrcPoP = undefined, hoverDstPoP = undefined;
 let hoverLandCableID = undefined;
@@ -185,7 +201,11 @@ const tabViewInitTimeout = 5000;
 // flyHeight
 const flyHeight = 2e7;
 
+// center position and height
 const centerLat = 34.28, centerLon = 86.11, centerHeight = 2e7;
+
+// floating point precision
+const PRECISION = 4;
 
 class ObjectID {
     constructor(_id, _type) {
@@ -329,10 +349,10 @@ class LandCableInterConnID extends InterConnID {
 }
 
 class SubmarineCableInterConnID extends InterConnID {
-    constructor(_id, _type, _src_pop_idx, _dst_pop_idx, _src_asn, _dst_asn, _src_ld_pts_idx, _dst_ld_pts_id, _src_lp_name, _dst_lp_name, _seg_name) {
+    constructor(_id, _type, _src_pop_idx, _dst_pop_idx, _src_asn, _dst_asn, _src_ld_pts_idx, _dst_ld_pts_idx, _src_lp_name, _dst_lp_name, _seg_name) {
         super(_id, _type, _src_pop_idx, _dst_pop_idx, _src_asn, _dst_asn);
         this.srcLdPtsIdx = _src_ld_pts_idx;
-        this.dstLdPtsIdx = _dst_ld_pts_id;
+        this.dstLdPtsIdx = _dst_ld_pts_idx;
         this.srcLpName = _src_lp_name;
         this.dstLpName = _dst_lp_name;
         this.segName = _seg_name;
@@ -482,6 +502,23 @@ function clearSearchArea() {
     document.getElementById('searchBox').value = "";
 }
 
+/**
+ * disable checkBox by id
+ * @param {string} id 
+ * @param {string} state
+ * @returns {void}
+ */
+function setCheckBoxState(id, state) {
+    if (state === 'enable') {
+        document.getElementById(id).disabled = false;
+    }
+    else if (state === 'disable') {
+        document.getElementById(id).disabled = true;
+    }
+    else {
+        document.getElementById(id).disabled = false;
+    }
+}
 
 main();
 
@@ -543,9 +580,9 @@ function loadPhysicalNodes()
                 show : true,
                 position : position,
                 pixelSize : phyNodeMinPixelSize + (phyNodeMaxPixelSize - phyNodeMinPixelSize) * (count - minCount) / (maxCount - minCount),
-                color : Cesium.Color.CYAN,
-                outlineColor : Cesium.Color.TRANSPARENT,
-                outlineWidth : 0,
+                color : phyNodeColor,
+                outlineColor : physicalNodeOutlineColor,
+                outlineWidth : phyNodeOutlineWidth,
                 scaleByDistance : new Cesium.NearFarScalar(phyNodeMinScaleDist, phyNodeMaxScaler, phyNodeMaxScaleDist, phyNodeMinScaler),
             })
 
@@ -603,7 +640,7 @@ function loadSubmarineCables() {
                         id: new SubmarineCableID(cable.id, PRIMTYPE.SUBMARINECABLE, cable.name, cable.feature_id, cable.source, cable.date, index),
                         geometry: cableGeometry,
                         attributes: {
-                            color: Cesium.ColorGeometryInstanceAttribute.fromColor(Cesium.Color.MIDNIGHTBLUE),
+                            color: Cesium.ColorGeometryInstanceAttribute.fromColor(submarineCableColor),
                         },
                     });
                     cableInstances.push(cableInstance);
@@ -646,8 +683,8 @@ function loadLandingPointCollection() {
                 id : pointID,
                 position : position,
                 pixelSize : landingPointPixelSize,
-                color : Cesium.Color.WHITE,
-                outlineColor : Cesium.Color.BLACK,
+                color : landingPointColor,
+                outlineColor : landingPointOutlineColor,
                 outlineWidth : landingPointOutlineWidth,
                 scaleByDistance: new Cesium.NearFarScalar(landingPointMinScaleDist, landingPointMaxScaler, landingPointMaxScaleDist, landingPointMinScaler),
             });
@@ -687,7 +724,7 @@ function loadLandCables() {
                     id: new LandCableID(dataItem.index, PRIMTYPE.LANDCABLE, dataItem.from_city, dataItem.from_state, dataItem.from_country, dataItem.to_city, dataItem.to_state, dataItem.to_country, dataItem.distance, dataItem.date),
                     geometry: cableGeometry,
                     attributes: {
-                        color: Cesium.ColorGeometryInstanceAttribute.fromColor(Cesium.Color.DARKORANGE),
+                        color: Cesium.ColorGeometryInstanceAttribute.fromColor(landCableColor),
                         // color: Cesium.ColorGeometryInstanceAttribute.fromColor(Cesium.Color.fromRandom({alpha: 1.0})),
                     },
                 });
@@ -733,14 +770,14 @@ function loadLogicNodes() {
             const nodeID = new LogicNodeID(dataItem.index, PRIMTYPE.LOGICNODE, dataItem.asn, dataItem.name, dataItem.organization);
             const asn = dataItem.asn;
             const pixelSize = calculateLogicNodePixelSize(cone_sizes[index], minLogicNodePixelSize, maxLogicNodePixelSize, minConeSize, maxConeSize);
-            const color = tier1AS.includes(asn) ? Cesium.Color.DARKRED : Cesium.Color.DARKSLATEBLUE;
+            const color = tier1AS.includes(asn) ? tier1ASColor : normalASColor;
             logicNodeCollection.add({
                 id : nodeID,
                 show : true,
                 position : position,
                 pixelSize : pixelSize,
                 color : color,
-                outlineColor : Cesium.Color.BLACK,
+                outlineColor : logicNodeOutlineColor,
                 outlineWidth : logicNodeOutlineWidth,
                 scaleByDistance: new Cesium.NearFarScalar(logicNodeMinScaleDist, logicNodeMaxScaler, logicNodeMaxScaleDist, logicNodeMinScaler),
             });
@@ -811,7 +848,7 @@ function loadLogicLinks() {
             appearance: new Cesium.PolylineMaterialAppearance({
                 translucent: true,
                 material: Cesium.Material.fromType("Color", {
-                    color: Cesium.Color.BLUE.withAlpha(p2cLogicLinkAlpha),
+                    color: p2cLogicLinkColor.withAlpha(p2cLogicLinkAlpha),
                 })
             }),
         }));
@@ -820,7 +857,7 @@ function loadLogicLinks() {
             appearance: new Cesium.PolylineMaterialAppearance({
                 translucent: true,
                 material: Cesium.Material.fromType("Color", {
-                    color: Cesium.Color.GREEN.withAlpha(p2pLogicLinkAlpha),
+                    color: p2pLogicLinkColor.withAlpha(p2pLogicLinkAlpha),
                 })
             }),
         }));
@@ -853,10 +890,10 @@ function setupMouseMoveEventListener() {
         hoverPointArray.forEach(hoverPoint => {
             if (hoverPoint !== undefined) {
                 hoverPoint.pixelSize = hoverPoint.pixelSize / hoverScaler;
-                // hoverPoint.color = hoverPoint.color.withAlpha(pointUnhoverAlpha);
+                hoverPoint.color = hoverPoint.color.withAlpha(unhoverAlpha);
             }
         });
-        hoverPhysicalNode = undefined, hoverSrcPoP = undefined, hoverDstPoP = undefined;
+        hoverPhysicalNode = undefined, hoverSrcPoP = undefined, hoverDstPoP = undefined, hoverSrcLandPoint = undefined, hoverDstLandPoint = undefined;
 
         if (hoverLandCableID !== undefined) {
             const attributes = localLandCableLineCollection.get(0).getGeometryInstanceAttributes(hoverLandCableID);
@@ -947,7 +984,7 @@ function setupMouseMoveEventListener() {
                             hoverPointArray.forEach(hoverPoint => {
                                 if (hoverPoint !== undefined) {
                                     hoverPoint.pixelSize = hoverPoint.pixelSize / hoverScaler;
-                                    // hoverPoint.color = hoverPoint.color.withAlpha(pointUnhoverAlpha);
+                                    hoverPoint.color = hoverPoint.color.withAlpha(unhoverAlpha);
                                 }
                             });
                             hoverPhysicalNode = currentPhysicalNode;
@@ -956,7 +993,7 @@ function setupMouseMoveEventListener() {
                             const _hoverPointArray = [hoverPhysicalNode, hoverSrcPoP, hoverDstPoP];
                             _hoverPointArray.forEach(hoverPoint => {
                                 hoverPoint.pixelSize = hoverPoint.pixelSize * hoverScaler;
-                                // hoverPoint.color = hoverPoint.color.withAlpha(hoverAlpha);
+                                hoverPoint.color = hoverPoint.color.withAlpha(hoverAlpha);
                             });
                             content = "<p>Facility: " + pickedObject.id.name + "<br>Organization: " + pickedObject.id.org + "<br>City: " + pickedObject.id.city + "<br>State: " + pickedObject.id.state + "<br>Country: " + pickedObject.id.country + "</p>";
                             showInfoBox(content, movement.endPosition.x, movement.endPosition.y);
@@ -974,7 +1011,7 @@ function setupMouseMoveEventListener() {
                                 hoverPointArray.forEach(hoverPoint => {
                                     if (hoverPoint !== undefined) {
                                         hoverPoint.pixelSize = hoverPoint.pixelSize / hoverScaler;
-                                        // hoverPoint.color = hoverPoint.color.withAlpha(pointUnhoverAlpha);
+                                        hoverPoint.color = hoverPoint.color.withAlpha(unhoverAlpha);
                                     }
                                 });
                             }
@@ -990,7 +1027,7 @@ function setupMouseMoveEventListener() {
                             _hoverPointArray.forEach(hoverPoint => {
                                 if (hoverPoint !== undefined) {
                                     hoverPoint.pixelSize = hoverPoint.pixelSize * hoverScaler;
-                                    // hoverPoint.color = hoverPoint.color.withAlpha(hoverAlpha);
+                                    hoverPoint.color = hoverPoint.color.withAlpha(hoverAlpha);
                                 }
                             });
                             content = "<p>From: " + pickedObject.id.fromCity + ", " + pickedObject.id.fromState + ", " + pickedObject.id.fromCountry + "<br>To: " + pickedObject.id.toCity + ", " + pickedObject.id.toState + ", " + pickedObject.id.toCountry + "<br>Type: Landcable" + "</p>";
@@ -1010,14 +1047,14 @@ function setupMouseMoveEventListener() {
                             hoverPointArray.forEach(hoverPoint => {
                                 if (hoverPoint !== undefined) {
                                     hoverPoint.pixelSize = hoverPoint.pixelSize / hoverScaler;
-                                    // hoverPoint.color = hoverPoint.color.withAlpha(pointUnhoverAlpha);
+                                    hoverPoint.color = hoverPoint.color.withAlpha(unhoverAlpha);
                                 }
                             });
                             const landingPointArray = [hoverSrcLandPoint, hoverDstLandPoint];
                             landingPointArray.forEach(landingPoint => {
                                 if (landingPoint !== undefined) {
                                     landingPoint.pixelSize = landingPoint.pixelSize / hoverScaler;
-                                    // landingPoint.color = landingPoint.color.withAlpha(pointUnhoverAlpha);
+                                    landingPoint.color = landingPoint.color.withAlpha(unhoverAlpha);
                                 }
                             });
                             hoverSubmarineCableID = pickedObject.id;
@@ -1032,14 +1069,16 @@ function setupMouseMoveEventListener() {
                             _hoverPointArray.forEach(hoverPoint => {
                                 if (hoverPoint !== undefined) {
                                     hoverPoint.pixelSize = hoverPoint.pixelSize * hoverScaler;
-                                    // hoverPoint.color = hoverPoint.color.withAlpha(hoverAlpha);
+                                    hoverPoint.color = hoverPoint.color.withAlpha(hoverAlpha);
                                 }
                             });
+                            hoverSrcLandPoint = localLandingPointCollection.get(pickedObject.id.srcLdPtsIdx);
+                            hoverDstLandPoint = localLandingPointCollection.get(pickedObject.id.dstLdPtsIdx);
                             const _landingPointArray = [hoverSrcLandPoint, hoverDstLandPoint];
                             _landingPointArray.forEach(landingPoint => {
                                 if (landingPoint !== undefined) {
                                     landingPoint.pixelSize = landingPoint.pixelSize * hoverScaler;
-                                    // landingPoint.color = landingPoint.color.withAlpha(hoverAlpha);
+                                    landingPoint.color = landingPoint.color.withAlpha(hoverAlpha);
                                 }
                             });
                             content = "<p>Landing Point 1: " + pickedObject.id.srcLpName + "<br>Landing Point 2: " + pickedObject.id.dstLpName + "<br>Cable: " + pickedObject.id.segName + "<br>Type: Submarinecable" + "</p>";
@@ -1250,6 +1289,13 @@ function closeSlidingBar() {
         // const closeSlidingbarBtn = document.getElementById(id);
         if (slidingBar.classList.contains('open')) { slidingBar.classList.remove('open'); }
     });
+
+    document.getElementById('as-checkbox-span').textContent = "AS";
+
+    setCheckBoxState("submarine-cable-checkbox", "enable");
+    setCheckBoxState("landing-points-checkbox", "enable");
+    setCheckBoxState("long-haul-cable-checkbox", "enable");
+    
     closeLegend();
 }
 
@@ -1319,6 +1365,7 @@ function logicalTabController() {
 
     switch(tmpSubViewType) {
         case SUBVIEWTYPE.GLOBAL:
+            showLegend("普通AS", "Tier-1 AS", normalASColor.toCssColorString(), tier1ASColor.toCssColorString());
             break;
         case SUBVIEWTYPE.LOCAL:
             switch(tmpQueryType) {
@@ -1360,7 +1407,7 @@ function physicalTabController() {
 
     switch(tmpSubViewType) {
         case SUBVIEWTYPE.GLOBAL:
-            break;
+            break;C
         case SUBVIEWTYPE.LOCAL:
             switch(tmpQueryType) {
                 case QUERYTYPE.SINGLE:
@@ -1475,12 +1522,14 @@ function setupQueryEventListener() {
                     var asn2 = parseInt(asns[1].replace("AS", ""), 10);
                     if (isNaN(asn1) || isNaN(asn2)) {
                         alert("Invalid input: " + input + ". Please input like this: AS3356-AS1299.");
+                        clearSearchArea();
                         return;
                     }
                     queryASTuple(asn1, asn2);
                 }
                 else {
                     alert("Invalid input: " + input + ". Please input like this: AS3356-AS1299.");
+                    clearSearchArea();
                 }
             }
             else {
@@ -1489,12 +1538,14 @@ function setupQueryEventListener() {
                     var asn = parseInt(input.replace("AS", ""), 10);
                     if (isNaN(asn)) {
                         alert("Invalid input: " + input + ". Please input like this: AS3356.");
+                        clearSearchArea();
                         return;
                     }
                     querySingleAS(asn);
                 }
                 else {
                     alert("Invalid input: " + input + ". Please input like this: AS3356.");
+                    clearSearchArea();
                 }
             }
         }
@@ -1568,6 +1619,7 @@ function setupSingleASLogicSlidingBarCloseEventListener() {
         tmpQueryType = QUERYTYPE.NONE;
         tmpQuerySingleAS = undefined;
         tmpQueryASTuple = undefined;
+        document.getElementById('as-checkbox-span').textContent = "AS";
         clearSearchArea();
         initLogicalTabView();
     });
@@ -1625,10 +1677,10 @@ function querySingleASLogic(asn) {
     function addSingleNode(index, asn, name, organization, latitude, longitude, cone_size, isSearchTarget) {
         let pixelSize = undefined, color = undefined;
         if (isSearchTarget) {
-            color = Cesium.Color.RED;
+            color = targetASColor;
         }
         else {
-            color = tier1AS.includes(asn) ? Cesium.Color.DARKRED : Cesium.Color.DARKSLATEBLUE;
+            color = tier1AS.includes(asn) ? tier1ASColor : normalASColor;
         }
         pixelSize = calculateLogicNodePixelSize(Math.log(cone_size), minLocalLogicNodePixelSize, maxLocalLogicNodePixelSize, minGlobalConeSize, maxGlobalConeSize);
         if (!isSearchTarget) {
@@ -1636,8 +1688,8 @@ function querySingleASLogic(asn) {
                 id : new LogicNodeID(index, PRIMTYPE.LOGICNODE, asn, name, organization),
                 position : Cesium.Cartesian3.fromDegrees(longitude, latitude, localLogicNodeHeight),
                 pixelSize : pixelSize,
-                color : Cesium.Color.fromAlpha(color, 0.5),
-                outlineColor : Cesium.Color.fromAlpha(Cesium.Color.BLACK, 0.5),
+                color : Cesium.Color.fromAlpha(color, localLogicNodeAlpha),
+                outlineColor : Cesium.Color.fromAlpha(localLogicNodeOutlineColor, localLogicNodeAlpha),
                 outlineWidth : localLogicNodeOutlineWidth,
                 scaleByDistance: new Cesium.NearFarScalar(localLogicNodeMinScaleDist, localLogicNodeMaxScaler, localLogicNodeMaxScaleDist, localLogicNodeMinScaler),
             });
@@ -1648,7 +1700,7 @@ function querySingleASLogic(asn) {
                 position : Cesium.Cartesian3.fromDegrees(longitude, latitude, localLogicNodeHeight),
                 pixelSize : pixelSize,
                 color : color,
-                outlineColor : Cesium.Color.BLACK,
+                outlineColor : localLogicNodeOutlineColor,
                 outlineWidth : localLogicNodeOutlineWidth,
                 scaleByDistance: new Cesium.NearFarScalar(localLogicNodeMinScaleDist, localLogicNodeMaxScaler, localLogicNodeMaxScaleDist, localLogicNodeMinScaler),
             });
@@ -1751,7 +1803,7 @@ function querySingleASLogic(asn) {
             appearance: new Cesium.PolylineMaterialAppearance({
                 translucent: true,
                 material: Cesium.Material.fromType("Color", {
-                    color: Cesium.Color.BLUE.withAlpha(localP2CLogicLinkAlpha),
+                    color: p2cLogicLinkColor.withAlpha(localP2CLogicLinkAlpha),
                 })
             }),
         }));
@@ -1760,7 +1812,7 @@ function querySingleASLogic(asn) {
             appearance: new Cesium.PolylineMaterialAppearance({
                 translucent: true,
                 material: Cesium.Material.fromType("Color", {
-                    color: Cesium.Color.GREEN.withAlpha(localP2PLogicLinkAlpha),
+                    color: p2pLogicLinkColor.withAlpha(localP2PLogicLinkAlpha),
                 })
             }),
         }));
@@ -1788,6 +1840,11 @@ function querySingleASLogic(asn) {
         localNbrLogicNodeCollection.show = true;
         localLogicLinkCollection.show = true;
         localTargetLogicNodeCollection.show = true;
+
+        document.getElementById('as-checkbox-span').textContent = "邻居AS";
+
+        showLegend("普通AS", "Tier-1 AS", normalASColor.toCssColorString(), tier1ASColor.toCssColorString());
+
         setToggleState("as-checkbox", true);
         setToggleState("p2p-checkbox", true);
         setToggleState("p2c-checkbox", true);
@@ -1833,39 +1890,71 @@ function querySingleASPhysical(asn) {
         slidingbar.classList.add('open');
     }
     
-    function setSingleASPhysicalSlidingBarInfo(asn, pops, facilities, queryData) {
-    
-        function findFacilityByID(facilityID, qData) {
-            let res = undefined;
-            for (let i=0; i<qData.length; i++) {
-                if (qData[i].index === facilityID) {
-                    res = qData[i];
-                    break;
-                }
-            }
-            return res;
-        }
-    
+    function setSingleASPhysicalSlidingBarInfo(asn, popMap, facilityMap, cityMap) {    
         const slidingbarTitle = document.getElementById('slidingbar2-title');
         slidingbarTitle.textContent = "AS" + asn + " PoP信息";
     
         const slidingBarContent = document.getElementById('slidingbar2-content');
         slidingBarContent.innerHTML = '';
+        // Statistics
+        let nbPoPWithFacility = 0;
+        const countrySet = new Set();
+        popMap.forEach((popItem, popIndex) => {
+            if (popItem.facility_id !== -1) { nbPoPWithFacility++; }
+            if (popItem.city_id !== -1) {
+                const cityItem = cityMap.get(popItem.city_id); 
+                countrySet.add(cityItem.country); 
+            }
+        });
+        const nbCountry = countrySet.size;
+
+        const table = document.createElement('table');
+        const row1 = table.insertRow();
+        const th1 = document.createElement('th');
+        th1.colSpan = 2;
+        th1.textContent = "统计信息";
+        row1.appendChild(th1);
+        const row2 = table.insertRow();
+        const th2 = document.createElement('th');
+        th2.textContent = "PoP总数";
+        row2.appendChild(th2);
+        const td2 = document.createElement('td');
+        td2.textContent = popMap.size;
+        row2.appendChild(td2);
+        const row3 = table.insertRow();
+        const th3 = document.createElement('th');
+        th3.textContent = "已映射机房设施的PoP数量";
+        row3.appendChild(th3);
+        const td3 = document.createElement('td');
+        td3.textContent = nbPoPWithFacility;
+        row3.appendChild(td3);
+        const row4 = table.insertRow();
+        const th4 = document.createElement('th');
+        th4.textContent = "覆盖国家/地区数量";
+        row4.appendChild(th4);
+        const td4 = document.createElement('td');
+        td4.textContent = nbCountry;
+        row4.appendChild(td4);
+        slidingBarContent.appendChild(table);
+
+        slidingBarContent.appendChild(document.createElement('hr'));
     
-        pops.forEach((pop, index) => {
+        popMap.forEach((popItem, popIndex) => {
+            const latitude = popItem.latitude.toFixed(PRECISION), longitude = popItem.longitude.toFixed(PRECISION);
             const table = document.createElement('table');
             const row1 = table.insertRow();
             const th1 = document.createElement('th');
+            th1.style.width = '30%';
             th1.textContent = 'PoP';
             row1.appendChild(th1);
             const td1 = document.createElement('td');
-            td1.textContent = `${pop[0]},${pop[1]}`;
+            td1.textContent = `${latitude},${longitude}`;
             td1.style.cursor = 'pointer'; // Make it look clickable
             td1.addEventListener('click', () => {
                 // Call CesiumJS camera flyTo method
                 if (camera) {
                     camera.flyTo({
-                        destination: Cesium.Cartesian3.fromDegrees(pop[1], pop[0], flyHeight) // Adjust height as needed
+                        destination: Cesium.Cartesian3.fromDegrees(longitude, latitude, flyHeight) // Adjust height as needed
                     });
                 } else {
                     alert('Cesium viewer is not initialized.');
@@ -1873,54 +1962,53 @@ function querySingleASPhysical(asn) {
             });
             row1.appendChild(td1);
     
-            const divider = document.createElement('hr');
-            slidingBarContent.appendChild(divider);
-    
             // Facility row
             const row2 = table.insertRow();
             const th2 = document.createElement('th');
-            th2.textContent = 'Facility';
+            th2.style.width = '30%';
+            th2.textContent = '机房设施';
             row2.appendChild(th2);
             const td2 = document.createElement('td');
-            const facility = findFacilityByID(facilities[index], queryData);
-            td2.textContent =  facility ? facility.name : 'Unknown';
+            const facilityId = popItem.facility_id;
+            if (facilityId !== -1) {
+                const facilityItem = facilityMap.get(facilityId);
+                td2.textContent = facilityItem.name;
+            }
+            else {
+                td2.textContent = '未定位';
+            }
             row2.appendChild(td2);
-    
-            if (facility) {
-                // Additional rows if facility exists
+            // Organization row
+            if (facilityId !== -1) {
                 const row3 = table.insertRow();
                 const th3 = document.createElement('th');
-                th3.textContent = 'Organization';
+                th3.style.width = '30%';
+                th3.textContent = '机构';
                 row3.appendChild(th3);
                 const td3 = document.createElement('td');
-                td3.textContent = facility.organization;
+                const facilityItem = facilityMap.get(facilityId);
+                td3.textContent = facilityItem.organization;
                 row3.appendChild(td3);
-    
-                const row4 = table.insertRow();
-                const th4 = document.createElement('th');
-                th4.textContent = 'City';
-                row4.appendChild(th4);
-                const td4 = document.createElement('td');
-                td4.textContent = facility.city;
-                row4.appendChild(td4);
-    
-                const row5 = table.insertRow();
-                const th5 = document.createElement('th');
-                th5.textContent = 'State';
-                row5.appendChild(th5);
-                const td5 = document.createElement('td');
-                td5.textContent = facility.state;
-                row5.appendChild(td5);
-    
-                const row6 = table.insertRow();
-                const th6 = document.createElement('th');
-                th6.textContent = 'Region';
-                row6.appendChild(th6);
-                const td6 = document.createElement('td');
-                td6.textContent = facility.country;
-                row6.appendChild(td6);
             }
+            // Location row
+            const row4 = table.insertRow();
+            const th4 = document.createElement('th');
+            th4.style.width = '30%';
+            th4.textContent = '地理位置';
+            row4.appendChild(th4);
+            const td4 = document.createElement('td');
+            const cityId = popItem.city_id;
+            if (cityId !== -1) {
+                const cityItem = cityMap.get(cityId);
+                td4.textContent = cityItem.city + ', ' + cityItem.state + ', ' + cityItem.country;
+            }
+            else {
+                td4.textContent = '未定位';
+            }
+            row4.appendChild(td4);
+
             slidingBarContent.appendChild(table);
+            slidingBarContent.appendChild(document.createElement('hr'));
         });
     }
 
@@ -1936,11 +2024,10 @@ function querySingleASPhysical(asn) {
     localSubmarineCableLineCollection.removeAll();
     localLandingPointCollection.removeAll();
 
-    const popPos = [];
-    const popIds = [];
     const popMap = new Map();
-
-    const facilityIds = [];
+    const cityIDs = new Set();
+    const cityMap = new Map();
+    const facilityIDs = new Set();
     const facilityMap = new Map();
     const facilityId2Angle = new Map();
 
@@ -1960,15 +2047,12 @@ function querySingleASPhysical(asn) {
             alert("No data found for ASN: " + asn);
             return;
         }
-        const facilitys = [];
         data.forEach(dataItem => {
-            popPos.push([dataItem.latitude, dataItem.longitude]);
-            facilityIds.push(dataItem.facility_id);
-            if (dataItem.facility_id !== -1) {facilitys.push(dataItem.facility_id);}
+            if (dataItem.facility_id !== -1) { facilityIDs.add(dataItem.facility_id); }
+            if (dataItem.city_id !== -1) { cityIDs.add(dataItem.city_id); }
             popMap.set(dataItem.index, dataItem);
-            popIds.push(dataItem.index);
         });
-        const params = facilitys.join(",");
+        const params = Array.from(facilityIDs).join(",");
         return ajaxPromise({
             url: baseURL + "/physical-nodes/detail",
             method: ajaxMethod,
@@ -1977,13 +2061,19 @@ function querySingleASPhysical(asn) {
             dataType: ajaxDataType
         });
     }).then(function(response) {
-        if (response === undefined) {initPhysicalTabView(); return;}
+        if (response === undefined) {
+            console.error("Failed to load physical nodes: " + message);
+            return;
+        }
         const data = response.data, dataLength = data.length, status = response.status, message = response.message;
         if (status !== "ok") {
             console.error("Failed to load physical nodes: " + message);
             return;
         }
-        if (dataLength === 0) {initPhysicalTabView(); return;}
+        if (dataLength === 0) {
+            console.log("No data found for ASN: " + asn);
+            return;
+        }
 
         data.forEach(dataItem => {
             const position = Cesium.Cartesian3.fromDegrees(dataItem.longitude, dataItem.latitude, facilityHeight);
@@ -1992,8 +2082,8 @@ function querySingleASPhysical(asn) {
                 id : nodeID,
                 position : position,
                 pixelSize : phyNodeMinPixelSize,
-                color : Cesium.Color.RED,
-                outlineColor : Cesium.Color.BLACK,
+                color : phyNodeColor,
+                outlineColor : physicalNodeOutlineColor,
                 outlineWidth : localPhyNodeOutlineWidth,
                 scaleByDistance : new Cesium.NearFarScalar(phyNodeMinScaleDist, phyNodeMaxScaler, phyNodeMaxScaleDist, phyNodeMinScaler),
             });
@@ -2001,11 +2091,38 @@ function querySingleASPhysical(asn) {
             facilityId2Angle.set(dataItem.index, 0);
         });
 
-        const directLinkInstances = [];
-        popIds.forEach(popId => {
-            const popItem = popMap.get(popId);
+        const params = Array.from(cityIDs).join(",");
+        return ajaxPromise({
+            url: baseURL + "/city/detail",
+            method: ajaxMethod,
+            data: {idxs: params},
+            timeout: ajaxTimeout,
+            dataType: ajaxDataType
+        });
+    }).then(function(response) {
+        if (response === undefined) {
+            initPhysicalTabView();
+            return;
+        }
+        const data = response.data, dataLength = data.length, status = response.status, message = response.message;
+        if (status !== "ok") {
+            initPhysicalTabView();
+            return;
+        }
+        if (dataLength === 0) {
+            initPhysicalTabView();
+            return;
+        }
+        data.forEach(dataItem => {
+            cityMap.set(dataItem.index, dataItem);
+        });
+        
+        const directLinkInstances = new Array();
+        const popIDs = new Array();
+        popMap.forEach((popItem, popId) => {
+            popIDs.push(popId);
             const popFacilityId = popItem.facility_id;
-            const radius = 50000;
+            const radius = 30000;
             let popLatitude = popItem.latitude, popLongitude = popItem.longitude;
 
             if (popFacilityId !== -1) {
@@ -2023,7 +2140,7 @@ function querySingleASPhysical(asn) {
                 show : true,
                 position : position,
                 pixelSize : popPixelSize,
-                color : Cesium.Color.Blue,
+                color : popColors[1],
                 outlineColor : Cesium.Color.BLACK,
                 outlineWidth : popOutlineWidth,
                 id : popID,
@@ -2042,7 +2159,7 @@ function querySingleASPhysical(asn) {
                 const linkInstance = new Cesium.GeometryInstance({
                     geometry: linkGeometry,
                     attributes: {
-                        color: Cesium.ColorGeometryInstanceAttribute.fromColor(Cesium.Color.RED),
+                        color: Cesium.ColorGeometryInstanceAttribute.fromColor(Cesium.Color.BLACK),
                     }
                 });
                 directLinkInstances.push(linkInstance);
@@ -2068,12 +2185,17 @@ function querySingleASPhysical(asn) {
         setToggleState("facility-checkbox", true);
         setToggleState("submarine-cable-checkbox", false);
         setToggleState("landing-points-checkbox", false);
-        setToggleState("long-haul-cable-checkbox", true);
+        setToggleState("long-haul-cable-checkbox", false);
 
-        setSingleASPhysicalSlidingBarInfo(asn, popPos, facilityIds, data);
+        setCheckBoxState("submarine-cable-checkbox", "disable");
+        setCheckBoxState("landing-points-checkbox", "disable");
+        setCheckBoxState("long-haul-cable-checkbox", "disable");
+
+        setSingleASPhysicalSlidingBarInfo(asn, popMap, facilityMap, cityMap);
         showSingleASPhysicalSlidingBar();
+        const targetPoP = popMap.get(popIDs[0]);
         camera.flyTo({
-            destination: Cesium.Cartesian3.fromDegrees(popPos[0][1], popPos[0][0], flyHeight)
+            destination: Cesium.Cartesian3.fromDegrees(targetPoP.longitude, targetPoP.latitude, flyHeight)
         });
     });
 }
@@ -2139,6 +2261,7 @@ function queryASTupleLogic(asn1, asn2) {
     logicLinkCollection.get(p2pLinkIndex).show = false;
     localLogicLinkCollection.removeAll();
     localNbrLogicNodeCollection.removeAll();
+    localTargetLogicNodeCollection.removeAll();
     let linkIndex, src_asn, dst_asn, link_type;
 
     ajaxPromise({
@@ -2189,8 +2312,8 @@ function queryASTupleLogic(asn1, asn2) {
             id : new LogicNodeID(srcNode.index, PRIMTYPE.LOGICNODE, srcNode.asn, srcNode.name, srcNode.organization),
             position : Cesium.Cartesian3.fromDegrees(srcNode.longitude, srcNode.latitude, localLogicNodeHeight),
             pixelSize : calculateLogicNodePixelSize(Math.log(srcConeSize), minLocalLogicNodePixelSize, maxLocalLogicNodePixelSize, minGlobalConeSize, maxGlobalConeSize),
-            color : tier1AS.includes(srcNode.asn) ? Cesium.Color.DARKRED : Cesium.Color.DARKSLATEBLUE,
-            outlineColor : Cesium.Color.BLACK,
+            color : tier1AS.includes(srcNode.asn) ? tier1ASColor : normalASColor,
+            outlineColor : localLogicNodeOutlineColor,
             outlineWidth : localLogicNodeOutlineWidth,
             scaleByDistance: new Cesium.NearFarScalar(localLogicNodeMinScaleDist, localLogicNodeMaxScaler, localLogicNodeMaxScaleDist, localLogicNodeMinScaler),
         });
@@ -2198,8 +2321,8 @@ function queryASTupleLogic(asn1, asn2) {
             id : new LogicNodeID(dstNode.index, PRIMTYPE.LOGICNODE, dstNode.asn, dstNode.name, dstNode.organization),
             position : Cesium.Cartesian3.fromDegrees(dstNode.longitude, dstNode.latitude, localLogicNodeHeight),
             pixelSize : calculateLogicNodePixelSize(Math.log(dstConeSize), minLocalLogicNodePixelSize, maxLocalLogicNodePixelSize, minGlobalConeSize, maxGlobalConeSize),
-            color : tier1AS.includes(dstNode.asn) ? Cesium.Color.DARKRED : Cesium.Color.DARKSLATEBLUE,
-            outlineColor : Cesium.Color.BLACK,
+            color : tier1AS.includes(dstNode.asn) ? tier1ASColor : normalASColor,
+            outlineColor : localLogicNodeOutlineColor,
             outlineWidth : localLogicNodeOutlineWidth,
             scaleByDistance: new Cesium.NearFarScalar(localLogicNodeMinScaleDist, localLogicNodeMaxScaler, localLogicNodeMaxScaleDist, localLogicNodeMinScaler),
         });
@@ -2218,7 +2341,7 @@ function queryASTupleLogic(asn1, asn2) {
             appearance: new Cesium.PolylineMaterialAppearance({
                 translucent: true,
                 material: Cesium.Material.fromType("Color", {
-                    color: Cesium.Color.BLUE.withAlpha(localP2CLogicLinkAlpha),
+                    color: p2cLogicLinkColor.withAlpha(localP2CLogicLinkAlpha),
                 })
             }),
         }));
@@ -2227,12 +2350,15 @@ function queryASTupleLogic(asn1, asn2) {
             appearance: new Cesium.PolylineMaterialAppearance({
                 translucent: true,
                 material: Cesium.Material.fromType("Color", {
-                    color: Cesium.Color.GREEN.withAlpha(localP2PLogicLinkAlpha),
+                    color: p2pLogicLinkColor.withAlpha(localP2PLogicLinkAlpha),
                 })
             }),
         }));
         localNbrLogicNodeCollection.show = true;
         localLogicLinkCollection.show = true;
+
+        showLegend("普通AS", "Tier-1 AS", normalASColor.toCssColorString(), tier1ASColor.toCssColorString());
+
         setToggleState("as-checkbox", true);
         setToggleState("p2p-checkbox", true);
         setToggleState("p2c-checkbox", true);
@@ -2250,11 +2376,16 @@ function queryASTupleLogic(asn1, asn2) {
  * @param {number} asn2
  * @return {void} 
  */
-function showLegend(asn1, asn2) {
+function showLegend(content1, content2, colorStr1, colorStr2) {
     const srcAsnElem = document.getElementById('srcAsn');
     const dstAsnElem = document.getElementById('dstAsn');
-    srcAsnElem.textContent = `AS${asn1}`;
-    dstAsnElem.textContent = `AS${asn2}`;
+    const borderStyle = 'text-shadow: -1px -1px 0 black, 1px -1px 0 black, -1px 1px 0 black, 1px 1px 0 black;';
+    srcAsnElem.textContent = content1;
+    dstAsnElem.textContent = content2;
+    const legendPoint1 = document.getElementById('legend-point-1');
+    const legendPoint2 = document.getElementById('legend-point-2');
+    legendPoint1.style = `color: ${colorStr1}; ` + borderStyle;
+    legendPoint2.style = `color: ${colorStr2}; ` + borderStyle;
     const legend = document.getElementById('legend');
     legend.style.visibility = 'visible';
 }
@@ -2280,10 +2411,11 @@ function queryASTuplePhysical(asn1, asn2) {
     function setASTuplePhysicalSlidingBarInfo(phyLinkItems, popMap, facilityMap, cityMap, landCableMap, submarineSegMap, landingPointMap, asn1, asn2) {
 
         function addPoP(table, popIndex, lIndex) {
-            const latitude1 = popMap.get(popIndex).latitude, longitude1 = popMap.get(popIndex).longitude;
+            const latitude1 = popMap.get(popIndex).latitude.toFixed(PRECISION), longitude1 = popMap.get(popIndex).longitude.toFixed(PRECISION);
             const pop1Row = table.insertRow();
             const pop1Header = document.createElement('th');
             pop1Header.textContent = `PoP${lIndex}`;
+            pop1Header.style.width = '30%';
             pop1Row.appendChild(pop1Header);
             const pop1Data = document.createElement('td');
             pop1Data.textContent = `${latitude1},${longitude1}`;
@@ -2304,7 +2436,8 @@ function queryASTuplePhysical(asn1, asn2) {
             const asn = popMap.get(popIndex).asn;
             const asnRow = table.insertRow();
             const asnHeader = document.createElement('th');
-            asnHeader.textContent = `ASN${lIndex}`;
+            asnHeader.textContent = `ASN`;
+            asnHeader.style.width = '30%';
             asnRow.appendChild(asnHeader);
             const asnData = document.createElement('td');
             asnData.textContent = asn;
@@ -2314,7 +2447,8 @@ function queryASTuplePhysical(asn1, asn2) {
         function addLocation(table, popIndex, lIndex) {
             const location1Row = table.insertRow();
             const location1Header = document.createElement('th');
-            location1Header.textContent = `location${lIndex}`;
+            location1Header.textContent = `地理位置`;
+            location1Header.style.width = '30%';
             location1Row.appendChild(location1Header);
             const location1Data = document.createElement('td');
             if (popMap.get(popIndex).city_id !== -1) {
@@ -2322,7 +2456,7 @@ function queryASTuplePhysical(asn1, asn2) {
                 location1Data.textContent = `${popCity.city}, ${popCity.state}, ${popCity.country}`;
             }
             else {
-                location1Data.textContent = 'unknown';
+                location1Data.textContent = '未定位';
             }
             location1Row.appendChild(location1Data);
         }
@@ -2330,7 +2464,8 @@ function queryASTuplePhysical(asn1, asn2) {
         function addType(table, link_type) {
             const typeRow = table.insertRow();
             const typeHeader = document.createElement('th');
-            typeHeader.textContent = 'Type';
+            typeHeader.textContent = '互联类型';
+            typeHeader.style.width = '30%';
             typeRow.appendChild(typeHeader);
             const typeData = document.createElement('td');
             typeData.textContent = link_type;
@@ -2342,6 +2477,34 @@ function queryASTuplePhysical(asn1, asn2) {
         slidingbarTitle.textContent = "AS" + asn1 + " - AS" + asn2 + " 互联信息";
         const slidingbar4Content = document.getElementById('slidingbar4Content');
         slidingbar4Content.innerHTML = '';
+
+        // statistics
+        // -- 1. header
+        const table = document.createElement('table');
+        const statHeader = table.insertRow();
+        const statHeaderCell = document.createElement('th');
+        statHeaderCell.textContent = '统计信息';
+        statHeaderCell.colSpan = 2;
+        statHeaderCell.className = 'link-header';
+        statHeader.appendChild(statHeaderCell);
+        // -- 2. statistics
+        const nbOfType = new Array(3).fill(0);
+        const linkTypes = ['facility', 'submarine', 'landcable'];
+        const linkTypesCN = ['机房设施互联数量', '海底光缆互联数量', '陆地光缆互联数量'];
+        phyLinkItems.forEach(phyLinkItem => {
+            nbOfType[linkTypes.indexOf(phyLinkItem.ltype)]++;
+        });
+        for (let i=0; i<3; i++) {
+            const statRow = table.insertRow();
+            const statTypeCell = document.createElement('th');
+            statTypeCell.textContent = linkTypesCN[i];
+            statRow.appendChild(statTypeCell);
+            const statNbCell = document.createElement('td');
+            statNbCell.textContent = nbOfType[i];
+            statRow.appendChild(statNbCell);
+        }
+        slidingbar4Content.appendChild(table);
+
         phyLinkItems.forEach((phyLinkItem, index) => {
             const table = document.createElement('table');
     
@@ -2359,7 +2522,7 @@ function queryASTuplePhysical(asn1, asn2) {
             addPoP(table, phyLinkItem.dst_pop_index, 2);
             addASN(table, phyLinkItem.dst_pop_index, 2);
             addLocation(table, phyLinkItem.dst_pop_index, 2);
-            addType(table, phyLinkItem.ltype);
+            addType(table, linkTypesCN[linkTypes.indexOf(phyLinkItem.ltype)].slice(0, 6));
             slidingbar4Content.appendChild(table);
         });
     }
@@ -2444,11 +2607,12 @@ function queryASTuplePhysical(asn1, asn2) {
             if (phyLinkDstLandingPointId !== -1) {landingPointIds.add(phyLinkDstLandingPointId);}
         });
 
-        const params = Array.from(popIds).join(",");
+        // const params = Array.from(popIds).join(",");
+        const params = `${asn1},${asn2}`;
         return ajaxPromise({
             url: baseURL + "/pop/detail",
             method: ajaxMethod,
-            data: {idxs: params},
+            data: {asns: params},
             timeout: ajaxTimeout,
             dataType: ajaxDataType
         });
@@ -2566,8 +2730,8 @@ function queryASTuplePhysical(asn1, asn2) {
         });
 
         const popColorMap = new Map();
-        popColorMap.set(asn1, Cesium.Color.DARKRED);
-        popColorMap.set(asn2, Cesium.Color.DARKGREEN);
+        popColorMap.set(asn1, popColors[0].withAlpha(unhoverAlpha));
+        popColorMap.set(asn2, popColors[1].withAlpha(unhoverAlpha));
         const hslColorList = generateHSLColors(phyLinkItems.length);
         const linkColorList = hslColorList.map(color => Cesium.Color.fromCssColorString(color));
         const outlineColor = Cesium.Color.BLACK;
@@ -2603,7 +2767,7 @@ function queryASTuplePhysical(asn1, asn2) {
                     show : true,
                     position : position,
                     pixelSize : localLandingPointPixelSize,
-                    color : Cesium.Color.WHITE,
+                    color : landingPointColor,
                     outlineColor : Cesium.Color.BLACK,
                     outlineWidth : localLandingPointOutlineWidth,
                     scaleByDistance: new Cesium.NearFarScalar(localLandingPointMinScaleDist, localLandingPointMaxScaler, localLandingPointMaxScaleDist, localLandingPointMinScaler),
@@ -2638,6 +2802,8 @@ function queryASTuplePhysical(asn1, asn2) {
             }
         });
 
+        
+
         phyLinkItems.forEach((phyLinkItem, phyLinkIndex) => {
             const linkType = phyLinkItem.ltype;
             const srcPoPItem = popMap.get(phyLinkItem.src_pop_index), dstPoPItem = popMap.get(phyLinkItem.dst_pop_index);
@@ -2653,7 +2819,7 @@ function queryASTuplePhysical(asn1, asn2) {
                         show : true,
                         position : Cesium.Cartesian3.fromDegrees(facilityItem.longitude, facilityItem.latitude, localPhyNodeHeight),
                         pixelSize : localPhyNodePixelSize,
-                        color : Cesium.Color.WHITE,
+                        color : phyNodeColor,
                         outlineColor : outlineColor,
                         outlineWidth : localPhyNodeOutlineWidth,
                         scaleByDistance: new Cesium.NearFarScalar(localPhyNodeMinScaleDist, localPhyNodeMaxScaler, localPhyNodeMaxScaleDist, localPhyNodeMinScaler),
@@ -2737,6 +2903,24 @@ function queryASTuplePhysical(asn1, asn2) {
             }
         });
 
+        popMap.forEach((popItem, popIndex) => {
+            if (popDrawFlag.get(popIndex) === undefined) {
+                const position = Cesium.Cartesian3.fromDegrees(popItem.longitude, popItem.latitude, popHeight);
+                const nodeID = new PoPID(popItem.index, PRIMTYPE.POP, popItem.asn, popItem.latitude, popItem.longitude, popItem.facility_id, popItem.city_id, popItem.landing_point_id, popItem.distance);
+                popCollection.add({
+                    id : nodeID,
+                    show : true,
+                    position : position,
+                    pixelSize : popPixelSize,
+                    color : popColorMap.get(popItem.asn).withAlpha(0.2),
+                    outlineColor : Cesium.Color.BLACK.withAlpha(0.2),
+                    outlineWidth : popOutlineWidth,
+                    scaleByDistance: new Cesium.NearFarScalar(popMinScaleDist, popMaxScaler, popMaxScaleDist, popMinScaler),
+                });
+                popDrawFlag.set(popItem.index, popCollection.length - 1);
+            }
+        });
+
         localDirectLinkCollection.add(new Cesium.GroundPolylinePrimitive({
             geometryInstances: directLinkInstances,
             appearance: new Cesium.PolylineColorAppearance({
@@ -2776,7 +2960,7 @@ function queryASTuplePhysical(asn1, asn2) {
 
         setASTuplePhysicalSlidingBarInfo(phyLinkItems, popMap, facilityMap, cityMap, landCableMap, submarineSegMap, landingPointMap, asn1, asn2);
         showASTuplePhysicalSlidingBar();
-        showLegend(asn1, asn2);
+        showLegend(`AS${asn1}`, `AS${asn2}`, popColorMap.get(asn1).toCssColorString(), popColorMap.get(asn2).toCssColorString());
 
         const popItem = popMap.get(phyLinkItems[0].src_pop_index);
         camera.flyTo({
@@ -2811,6 +2995,11 @@ function setupASTuplePhysicalSlidingBarCloseEventListener() {
         tmpQueryType = QUERYTYPE.NONE;
         tmpQuerySingleAS = undefined;
         tmpQueryASTuple = undefined;
+
+        setCheckBoxState("submarine-cable-checkbox", "enable");
+        setCheckBoxState("landing-points-checkbox", "enable");
+        setCheckBoxState("long-haul-cable-checkbox", "enable");
+
         closeLegend();
         clearSearchArea();
         initPhysicalTabView();

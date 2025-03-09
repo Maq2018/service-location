@@ -122,7 +122,7 @@
             <input id="as-checkbox" type="checkbox">
             <span class="slider black"></span>
           </label>
-          <span class="label">AS</span>
+          <span id="as-checkbox-span" class="label">AS</span>
         </div>
         <div class="switch-container">
           <label class="switch">
@@ -145,28 +145,28 @@
         <div class="switch-container">
           <label class="switch">
             <input id="facility-checkbox" type="checkbox">
-            <span class="slider"></span>
+            <span class="slider cyan"></span>
           </label>
           <span class="label">机房设施</span>
         </div>
         <div class="switch-container">
           <label class="switch">
             <input id="landing-points-checkbox" type="checkbox">
-            <span class="slider"></span>
+            <span class="slider cornsilk"></span>
           </label>
           <span class="label">登陆点</span>
         </div>
         <div class="switch-container">
           <label class="switch">
             <input id="submarine-cable-checkbox" type="checkbox">
-            <span class="slider"></span>
+            <span class="slider midnightblue"></span>
           </label>
           <span class="label">海缆</span>
         </div>
         <div class="switch-container">
           <label class="switch">
             <input id="long-haul-cable-checkbox" type="checkbox">
-            <span class="slider"></span>
+            <span class="slider darkorange"></span>
           </label>
           <span class="label">陆缆</span>
         </div>
@@ -175,9 +175,8 @@
   </div>
 
   <div id="legend">
-    <strong>图例</strong>
-    <div><span style="color: darkgreen;">●</span> <span id="srcAsn">绿色点</span></div>
-    <div><span style="color: darkred;">●</span> <span id="dstAsn">红色点</span></div>
+    <div><span id="legend-point-1" style="color: #FFA500;">●</span> <span id="srcAsn">绿色点</span></div>
+    <div><span id="legend-point-2" style="color: #800080;">●</span> <span id="dstAsn">红色点</span></div>
   </div>
 
   <script type="module" src="/js/main.js"></script>
