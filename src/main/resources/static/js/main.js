@@ -2960,7 +2960,7 @@ function queryASTuplePhysical(asn1, asn2) {
 
         setASTuplePhysicalSlidingBarInfo(phyLinkItems, popMap, facilityMap, cityMap, landCableMap, submarineSegMap, landingPointMap, asn1, asn2);
         showASTuplePhysicalSlidingBar();
-        showLegend(`AS${asn1}`, `AS${asn2}`, popColorMap.get(asn1).toCssColorString(), popColorMap.get(asn2).toCssColorString());
+        showLegend(`AS${asn1}`, `AS${asn2}`, popColors[0].toCssColorString(), popColors[1].toCssColorString());
 
         const popItem = popMap.get(phyLinkItems[0].src_pop_index);
         camera.flyTo({
