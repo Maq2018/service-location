@@ -156,7 +156,7 @@ const localLogicLinkCollection = scene.primitives.add(new Cesium.PrimitiveCollec
 const localP2CLinkIndex = 0, localP2PLinkIndex = 1;
 const localLogicLinkHeight = 0;
 const localMinLogicLinkLineWidth = 1, localMaxLogicLinkLineWidth = 2;
-const localP2CLogicLinkAlpha = 0.3, localP2PLogicLinkAlpha = 1;
+const localP2CLogicLinkAlpha = 0.3, localP2PLogicLinkAlpha = 0.5;
 
 // pop collection
 const popCollection = scene.primitives.add(new Cesium.PointPrimitiveCollection());
