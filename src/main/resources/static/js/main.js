@@ -139,7 +139,7 @@ const tier1ASColor = Cesium.Color.fromCssColorString('#FDB863'), normalASColor =
 const logicLinkCollection = scene.primitives.add(new Cesium.PrimitiveCollection());
 const p2cLinkIndex = 0, p2pLinkIndex = 1;
 const logicLinkHeight = 0;
-const p2cLogicLinkColor = Cesium.Color.fromCssColorString('#1F78B4'), p2pLogicLinkColor = Cesium.Color.fromCssColorString('#8C564B');
+const p2cLogicLinkColor = Cesium.Color.fromCssColorString('#1F78B4'), p2pLogicLinkColor = Cesium.Color.fromCssColorString('#FFFF77');
 const minLogicLinkLineWidth = 1, maxLogicLinkLineWidth = 2, p2cLogicLinkAlpha = 0.3, p2pLogicLinkAlpha = 0.15;
 
 // local logic node collection
@@ -156,7 +156,7 @@ const localLogicLinkCollection = scene.primitives.add(new Cesium.PrimitiveCollec
 const localP2CLinkIndex = 0, localP2PLinkIndex = 1;
 const localLogicLinkHeight = 0;
 const localMinLogicLinkLineWidth = 1, localMaxLogicLinkLineWidth = 2;
-const localP2CLogicLinkAlpha = 0.3, localP2PLogicLinkAlpha = 0.15;
+const localP2CLogicLinkAlpha = 0.3, localP2PLogicLinkAlpha = 1;
 
 // pop collection
 const popCollection = scene.primitives.add(new Cesium.PointPrimitiveCollection());
@@ -2895,7 +2895,7 @@ function queryASTuplePhysical(asn1, asn2) {
                             srcLandingPoint.cable_id, dstLandingPoint.cable_id, ""),
                         geometry: segGeometry,
                         attributes: {
-                            color: Cesium.ColorGeometryInstanceAttribute.fromColor(phyLinkColor.withAlpha(submarinecableUnhoverAlpha)),
+                            color: Cesium.ColorGeometryInstanceAttribute.fromColor(submarineCableColor.withAlpha(submarinecableUnhoverAlpha)), // phyLinkColor
                         },
                     });
                     submarineCableInstances.push(segInstance);

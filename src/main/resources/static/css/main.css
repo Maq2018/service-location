@@ -124,7 +124,7 @@ input:checked + .slider.blue {
 }
 
 input:checked + .slider.green {
-  background-color: #8C564B; /* 绿色 */
+  background-color: #FFFF77; /* 浅黄色 */
 }
 
 input:checked + .slider.black {
